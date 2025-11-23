@@ -1522,10 +1522,16 @@ class HomeActivity : AppCompatActivity() {
             normalizedName.contains("metas") || normalizedName.contains("meta") -> R.drawable.goal
             normalizedName.contains("paypal") -> R.drawable.paypal
             normalizedName.contains("procinal") -> R.drawable.procinal
-            normalizedName.contains("win") -> R.drawable.win
+            normalizedName.contains("win") && !normalizedName.contains("paga") -> R.drawable.win
             normalizedName.contains("bre-b") || normalizedName.contains("breb") -> R.drawable.bre_b
             normalizedName.contains("tu llave") || normalizedName.contains("tullave") -> R.drawable.tuullave
             normalizedName.contains("recarga") -> R.drawable.recargacelular
+            normalizedName.contains("qr negocios") || normalizedName.contains("qrnegocios") -> R.drawable.qrrr_negocioss
+            normalizedName.contains("paga y gana") || normalizedName.contains("payaga") -> R.drawable.payout_win
+            normalizedName.contains("promos") || normalizedName.contains("descuentos") -> R.drawable.promos_descuentos
+            normalizedName.contains("tienda virtual") || normalizedName.contains("tiendavirtual") -> R.drawable.tiendavirtual
+            normalizedName.contains("tu plata en 2025") || normalizedName.contains("tuplata2025") -> R.drawable.tu_plata_2025_icon
+            normalizedName.contains("tus llaves") || normalizedName.contains("tusllaves") -> R.drawable.key
             else -> {
                 android.util.Log.w("HomeActivity", "⚠️ Icono no encontrado para servicio: '$serviceName', usando icono por defecto")
                 R.drawable.ic_launcher_foreground // Icono por defecto
