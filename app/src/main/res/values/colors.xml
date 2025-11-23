@@ -111,7 +111,7 @@
     <color name="gris">#ff888888</color>
     <color name="highlighted_text_material_dark">#6680cbc4</color>
     <color name="highlighted_text_material_light">#66009688</color>
-    <color name="ic_launcher_background">#ffffffff</color>
+    <color name="ic_launcher_background">#200020</color>
     <color name="input_label_pink">#ffda0081</color>
     <color name="key_pressed_background">#33ffffff</color>
     <color name="m3_ref_palette_error0">#ff000000</color>

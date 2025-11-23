@@ -31,9 +31,9 @@
     <application
         android:name=".App"
         android:allowBackup="false"
-        android:icon="@drawable/ic_nequixofficial_foreground"
+        android:icon="@mipmap/ic_nequixofficial"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/ic_nequixofficial_foreground"
+        android:roundIcon="@mipmap/ic_nequixofficial_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.NEQUIXOFFICIAL.NoPreview"
         android:description="@string/app_description"
