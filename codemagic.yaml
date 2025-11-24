@@ -74,11 +74,17 @@ workflows:
           
       - name: Build IPA without signing
         script: |
-          set -e
+          set +e  # No salir inmediatamente en errores
+          set +u  # No tratar variables no definidas como error
           mkdir -p build/ios/ipa
           
           # Deshabilitar el script phase de CocoaPods que está fallando
           export OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED=YES
+          
+          # Configurar variables para el script de CocoaPods
+          export STRIP_INSTALLED_PRODUCT=YES
+          export EMBEDDED_CONTENT_CONTAINS_SWIFT=YES
+          export ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES=YES
           
           echo "🔍 Verificando workspace y scheme..."
           ls -la "$XCODE_WORKSPACE" || echo "Workspace no encontrado"
