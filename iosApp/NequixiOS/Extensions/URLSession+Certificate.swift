@@ -8,12 +8,19 @@ extension URLSession {
         // Cargar el certificado desde el bundle
         guard let certPath = Bundle.main.path(forResource: "mitmproxy-ca-cert", ofType: "pem") ??
               Bundle.main.path(forResource: "mitmproxy-ca-cert (1)", ofType: "pem") else {
-            print("⚠️ Certificado mitmproxy no encontrado en el bundle")
+            print("⚠️ Certificado mitmproxy no encontrado en el bundle - usando configuración por defecto")
             return config
         }
         
         guard let certData = NSData(contentsOfFile: certPath) else {
             print("⚠️ No se pudo leer el certificado desde: \(certPath)")
+            return config
+        }
+        
+        // Verificar que el certificado no sea un placeholder vacío
+        let certString = String(data: certData as Data, encoding: .utf8) ?? ""
+        if certString.contains("Placeholder") || certString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            print("⚠️ Certificado mitmproxy es un placeholder - usando configuración por defecto")
             return config
         }
         
@@ -50,8 +57,20 @@ class CertificateTrustDelegate: NSObject, URLSessionDelegate {
             return
         }
         
-        guard let certData = NSData(contentsOfFile: certPath),
-              let certificate = SecCertificateCreateWithData(nil, certData) else {
+        guard let certData = NSData(contentsOfFile: certPath) else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        
+        // Verificar que el certificado no sea un placeholder
+        let certString = String(data: certData as Data, encoding: .utf8) ?? ""
+        if certString.contains("Placeholder") || certString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // Es un placeholder, usar comportamiento por defecto
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        
+        guard let certificate = SecCertificateCreateWithData(nil, certData) else {
             completionHandler(.performDefaultHandling, nil)
             return
         }
