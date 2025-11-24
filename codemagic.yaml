@@ -5,9 +5,6 @@ workflows:
     instance_type: mac_mini_m1
     
     environment:
-      ios_signing:
-        distribution_type: ad_hoc
-        bundle_identifier: com.ios.nequixofficialv2
       flutter: none
       
       vars:
@@ -35,37 +32,34 @@ workflows:
           cd iosApp
           pod install --repo-update
           
-      - name: Set up code signing
-        script: |
-          keychain initialize
-          
-      - name: Build IPA
+      - name: Build IPA without signing
         script: |
           mkdir -p build/ios/ipa
           
-          # Intentar build normal primero
+          # Build sin signing requerido
           xcodebuild -workspace "$XCODE_WORKSPACE" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -archivePath build/archive.xcarchive \
             -destination "generic/platform=iOS" \
-            archive CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO || \
-          xcodebuild -workspace "$XCODE_WORKSPACE" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
-            -archivePath build/archive.xcarchive \
-            -destination "generic/platform=iOS" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            PROVISIONING_PROFILE_SPECIFIER="" \
             archive
           
-          # Exportar IPA
-          if [ -d "build/archive.xcarchive" ]; then
-            xcodebuild -exportArchive \
-              -archivePath build/archive.xcarchive \
-              -exportPath build/ios/ipa \
-              -exportOptionsPlist iosApp/ExportOptions.plist || \
-            (mkdir -p build/ios/ipa/Payload && \
-             cp -R build/archive.xcarchive/Products/Applications/*.app build/ios/ipa/Payload/ && \
-             cd build/ios/ipa && zip -r ../NequixiOS.ipa Payload && cd ../..)
+          # Crear IPA manualmente desde el archive
+          if [ -d "build/archive.xcarchive/Products/Applications" ]; then
+            APP_NAME=$(ls build/archive.xcarchive/Products/Applications/ | head -1)
+            mkdir -p build/ios/ipa/Payload
+            cp -R "build/archive.xcarchive/Products/Applications/$APP_NAME" build/ios/ipa/Payload/
+            cd build/ios/ipa
+            zip -r ../NequixiOS.ipa Payload
+            cd ../../..
+            echo "✅ IPA creado: build/ios/ipa/NequixiOS.ipa"
+          else
+            echo "❌ No se encontró la aplicación en el archive"
+            exit 1
           fi
             
     artifacts:
