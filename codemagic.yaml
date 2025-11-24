@@ -123,60 +123,41 @@ try:
     
     original_content = content
     
-    # Buscar targets que terminan en _Privacy
-    # Patrón: buscar la sección del target y encontrar CopySwiftLibs build phase
-    # Necesitamos encontrar el UUID del build phase CopySwiftLibs dentro de cada target _Privacy
+    # Estrategia más simple: encontrar todas las referencias a CopySwiftLibs en buildPhases
+    # y eliminarlas, luego comentar las definiciones
     
-    # Estrategia: encontrar todos los targets _Privacy y sus build phases
-    # Luego buscar CopySwiftLibs phases con dst_subfolder_spec = 16
-    
-    # Buscar todas las referencias a CopySwiftLibs que están dentro de targets _Privacy
-    # El patrón es: /* CopySwiftLibs */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = ...; dstPath = ""; dstSubfolderSpec = 16; ...};
-    
-    # Encontrar todos los UUIDs de CopySwiftLibs phases
-    copy_swift_libs_phases = re.findall(r'([A-F0-9]{24}) /\* CopySwiftLibs \*/ = \{', content)
+    # 1. Encontrar todos los UUIDs de CopySwiftLibs phases
+    copy_swift_libs_pattern = r'([A-F0-9]{24}) /\* CopySwiftLibs \*/ = \{'
+    copy_swift_libs_phases = re.findall(copy_swift_libs_pattern, content)
     
     if copy_swift_libs_phases:
         print(f"  Encontrados {len(copy_swift_libs_phases)} CopySwiftLibs phases")
         
-        # Para cada target _Privacy, encontrar si tiene una referencia a CopySwiftLibs
-        # Buscar targets que terminan en _Privacy
-        privacy_targets = re.findall(r'([A-F0-9]{24}) /\* (.*_Privacy) \*/ = \{', content)
+        # 2. Eliminar referencias en buildPhases de todos los targets
+        for phase_uuid in copy_swift_libs_phases:
+            # Eliminar la línea completa que contiene la referencia en buildPhases
+            # Patrón: espacios + UUID + /* CopySwiftLibs */ + posible coma + newline
+            pattern = rf'\s*{phase_uuid} /\* CopySwiftLibs \*/,?\s*\n'
+            content = re.sub(pattern, '', content)
+            print(f"    Removida referencia a CopySwiftLibs phase {phase_uuid}")
         
-        for target_uuid, target_name in privacy_targets:
-            print(f"  Procesando target: {target_name} ({target_uuid})")
-            
-            # Buscar la sección buildPhases de este target
-            # Patrón: target_uuid /* target_name */ = { ... buildPhases = ( ... ); ... };
-            target_pattern = rf'({target_uuid} /\* {re.escape(target_name)} \*/ = \{{[^}}]*buildPhases = \()([^)]+)(\);'
-            match = re.search(target_pattern, content, re.DOTALL)
-            
-            if match:
-                build_phases_section = match.group(2)
-                # Buscar referencias a CopySwiftLibs en esta sección
-                for phase_uuid in copy_swift_libs_phases:
-                    if phase_uuid in build_phases_section:
-                        print(f"    Removiendo CopySwiftLibs phase {phase_uuid} de {target_name}")
-                        # Remover la línea que contiene esta referencia
-                        build_phases_section = re.sub(rf'\s*{phase_uuid} /\* CopySwiftLibs \*/,?\s*\n?', '', build_phases_section)
-                        # Actualizar el contenido
-                        content = content.replace(match.group(0), match.group(1) + build_phases_section + match.group(3))
-    
-    # También eliminar las definiciones de CopySwiftLibs phases completamente
-    # Esto evita que Xcode intente ejecutarlas
-    for phase_uuid in copy_swift_libs_phases:
-        # Buscar y comentar la definición completa del phase
-        phase_pattern = rf'({phase_uuid} /\* CopySwiftLibs \*/ = \{{[^}}]+\}};)'
-        if re.search(phase_pattern, content):
-            print(f"  Comentando definición de CopySwiftLibs phase {phase_uuid}")
-            content = re.sub(phase_pattern, r'/* \1 */', content, flags=re.DOTALL)
+        # 3. Comentar las definiciones completas de CopySwiftLibs phases
+        for phase_uuid in copy_swift_libs_phases:
+            # Buscar la definición completa del phase (hasta el cierre })
+            # Patrón: UUID /* CopySwiftLibs */ = { ... };
+            phase_def_pattern = rf'({phase_uuid} /\* CopySwiftLibs \*/ = \{{[^}}]+\}};)'
+            def_match = re.search(phase_def_pattern, content, re.DOTALL)
+            if def_match:
+                # Comentar toda la definición
+                content = content.replace(def_match.group(0), f'/* {def_match.group(0)} */')
+                print(f"    Comentada definición de CopySwiftLibs phase {phase_uuid}")
     
     if content != original_content:
         with open('Pods/Pods.xcodeproj/project.pbxproj', 'w') as f:
             f.write(content)
-        print("✅ Fix aplicado correctamente")
+        print("✅ Fix aplicado correctamente - CopySwiftLibs removido de todos los targets")
     else:
-        print("⚠️ No se encontraron cambios necesarios")
+        print("⚠️ No se encontraron CopySwiftLibs phases para remover")
         
 except Exception as e:
     print(f"⚠️ Error aplicando fix: {e}")
