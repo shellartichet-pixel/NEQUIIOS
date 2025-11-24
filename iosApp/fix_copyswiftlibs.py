@@ -36,19 +36,35 @@ try:
     print(f"🔍 Encontrados {len(copy_swift_libs_phases)} CopySwiftLibs phases: {copy_swift_libs_phases}")
     
     if copy_swift_libs_phases:
-        # 2. Eliminar referencias en buildPhases de TODOS los targets (no solo _Privacy)
+        # 2. Eliminar referencias en buildPhases de TODOS los targets
+        # Buscar todas las referencias a CopySwiftLibs en buildPhases
+        # El formato puede ser: UUID /* CopySwiftLibs */, o UUID /* CopySwiftLibs */
         for phase_uuid in copy_swift_libs_phases:
-            # Patrón más agresivo: eliminar la línea completa con cualquier formato
-            patterns = [
-                rf'\s*{phase_uuid} /\* CopySwiftLibs \*/,?\s*\n',  # Con coma opcional
-                rf'\s*{phase_uuid} /\* CopySwiftLibs \*/,\s*\n',   # Con coma
-                rf'\s*{phase_uuid} /\* CopySwiftLibs \*/\s*\n',    # Sin coma
+            # Buscar en buildPhases = ( ... UUID /* CopySwiftLibs */ ... )
+            # Necesitamos encontrar la línea dentro de buildPhases
+            build_phases_pattern = rf'(buildPhases = \(.*?)(\s*{re.escape(phase_uuid)}\s+/\*\s+CopySwiftLibs\s+\*/,?\s*\n)(.*?\);)'
+            
+            def remove_phase_ref(match):
+                # Remover la referencia del buildPhases
+                return match.group(1) + match.group(3)
+            
+            new_content = re.sub(build_phases_pattern, remove_phase_ref, content, flags=re.DOTALL)
+            if new_content != content:
+                content = new_content
+                print(f"  ✅ Removida referencia a CopySwiftLibs phase {phase_uuid} de buildPhases")
+                changes_made = True
+            
+            # También intentar con patrones más simples
+            simple_patterns = [
+                rf'\s+{re.escape(phase_uuid)}\s+/\*\s+CopySwiftLibs\s+\*/,?\s*\n',
+                rf'\t+{re.escape(phase_uuid)}\s+/\*\s+CopySwiftLibs\s+\*/,?\s*\n',
+                rf'{re.escape(phase_uuid)}\s+/\*\s+CopySwiftLibs\s+\*/,?\s*\n',
             ]
             
-            for pattern in patterns:
+            for pattern in simple_patterns:
                 if re.search(pattern, content):
                     content = re.sub(pattern, '', content)
-                    print(f"  ✅ Removida referencia a CopySwiftLibs phase {phase_uuid}")
+                    print(f"  ✅ Removida referencia (patrón simple) a CopySwiftLibs phase {phase_uuid}")
                     changes_made = True
                     break
         
