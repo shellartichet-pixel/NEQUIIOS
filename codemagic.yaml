@@ -54,16 +54,22 @@ workflows:
           pod install --repo-update
           echo "✅ CocoaPods instalado"
           
+          # Dar permisos de ejecución a todos los scripts de CocoaPods
+          echo "🔧 Dando permisos de ejecución a scripts de CocoaPods..."
+          find "Pods/Target Support Files" -name "*.sh" -type f -exec chmod +x {} \; || true
+          
           # Corregir el script de CocoaPods para evitar error de variable no definida
           FRAMEWORKS_SCRIPT="Pods/Target Support Files/Pods-NequixiOS/Pods-NequixiOS-frameworks.sh"
           if [ -f "$FRAMEWORKS_SCRIPT" ]; then
             echo "🔧 Corrigiendo script de CocoaPods..."
+            chmod +x "$FRAMEWORKS_SCRIPT"
             # Agregar verificación de variables antes de usar source
             sed -i '' 's/source "$SCRIPT_INPUT_FILE_0"/[ -f "$SCRIPT_INPUT_FILE_0" ] \&\& source "$SCRIPT_INPUT_FILE_0"/g' "$FRAMEWORKS_SCRIPT" || \
             sed -i 's/source "$SCRIPT_INPUT_FILE_0"/[ -f "$SCRIPT_INPUT_FILE_0" ] \&\& source "$SCRIPT_INPUT_FILE_0"/g' "$FRAMEWORKS_SCRIPT" || true
             # Deshabilitar modo estricto en el script - usar echo en lugar de sed con newline
             echo -e "set +u\n$(cat $FRAMEWORKS_SCRIPT)" > "$FRAMEWORKS_SCRIPT.tmp" && mv "$FRAMEWORKS_SCRIPT.tmp" "$FRAMEWORKS_SCRIPT" || true
-            echo "✅ Script corregido"
+            chmod +x "$FRAMEWORKS_SCRIPT"
+            echo "✅ Script corregido y con permisos"
           fi
           cd ..
           
