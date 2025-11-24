@@ -6,6 +6,7 @@ workflows:
     
     environment:
       flutter: none
+      # NO configurar ios_signing para evitar detección automática
       
       vars:
         XCODE_WORKSPACE: "iosApp/NequixiOS.xcworkspace"
