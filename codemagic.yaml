@@ -5,14 +5,10 @@ workflows:
     instance_type: mac_mini_m1
     
     environment:
-      # NO configurar ios_signing - el IPA se genera sin firmar
-      # Para firmarlo después, usa Sideloadly o configura certificados en Settings
-      # Si quieres firma automática, configura certificados en Settings → Code signing
-      # y luego descomenta la sección ios_signing abajo
-      
-      # ios_signing:
-      #   distribution_type: ad_hoc
-      #   bundle_identifier: com.ios.nequixofficialv2
+      # Firma automática habilitada - requiere certificados configurados en Codemagic Settings
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: com.ios.nequixofficialv2
       
       vars:
         XCODE_WORKSPACE: "iosApp/NequixiOS.xcworkspace"
@@ -22,10 +18,14 @@ workflows:
       cocoapods: default
       
     scripts:
-      - name: Fix Xcode Signing (CRITICAL - FIRST STEP)
+      - name: Enable Xcode Automatic Signing
         script: |
-          chmod +x ./fix_xcode_signing.sh || true
-          ./fix_xcode_signing.sh || echo "Warning: Could not fix signing"
+          # Habilitar signing automático - Codemagic lo gestionará
+          sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g' "$XCODE_PROJECT/project.pbxproj" || \
+          sed -i 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g' "$XCODE_PROJECT/project.pbxproj" || true
+          sed -i '' 's/CODE_SIGNING_REQUIRED = NO;/CODE_SIGNING_REQUIRED = YES;/g' "$XCODE_PROJECT/project.pbxproj" || \
+          sed -i 's/CODE_SIGNING_REQUIRED = NO;/CODE_SIGNING_REQUIRED = YES;/g' "$XCODE_PROJECT/project.pbxproj" || true
+          echo "✅ Signing automático habilitado"
           
       - name: Prepare iOS Build
         script: |
@@ -99,15 +99,7 @@ workflows:
             -Pkotlin.native.cocoapods.archs="arm64" \
             -Pkotlin.native.cocoapods.configuration=Release || echo "Warning: syncFramework puede fallar, continuando..."
           
-      - name: Disable automatic signing in Xcode project
-        script: |
-          # Modificar el proyecto para deshabilitar signing
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$XCODE_PROJECT/project.pbxproj" || \
-          sed -i 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$XCODE_PROJECT/project.pbxproj" || true
-          sed -i '' 's/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g' "$XCODE_PROJECT/project.pbxproj" || \
-          sed -i 's/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g' "$XCODE_PROJECT/project.pbxproj" || true
-          
-      - name: Build IPA without signing
+      - name: Build IPA with automatic signing
         script: |
           set +e  # No salir inmediatamente en errores
           set +u  # No tratar variables no definidas como error
@@ -132,24 +124,15 @@ workflows:
             -configuration Release \
             -archivePath build/archive.xcarchive \
             -destination "generic/platform=iOS" \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            PROVISIONING_PROFILE="" \
-            DEVELOPMENT_TEAM="" \
             OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED=YES \
             archive 2>&1 | tee build.log || {
             echo "❌ Error en archive, intentando build directo..."
-            # Intentar build sin archive
+            # Intentar build sin archive (con firma automática)
             xcodebuild -workspace "$XCODE_WORKSPACE" \
               -scheme "$XCODE_SCHEME" \
               -configuration Release \
               -destination "generic/platform=iOS" \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
+              OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED=YES \
               build
             # Buscar el .app compilado
             APP_PATH=$(find build -name "*.app" -type d | head -1)
@@ -215,6 +198,12 @@ workflows:
                 echo "⚠️ ADVERTENCIA: El IPA es muy pequeño (${IPA_SIZE_MB}MB). Puede faltar contenido."
                 echo "Verificando contenido del IPA..."
                 unzip -l "$IPA_PATH" | head -30
+              elif [ "$IPA_SIZE_MB" -lt 20 ]; then
+                echo "⚠️ ADVERTENCIA: El IPA es pequeño (${IPA_SIZE_MB}MB). Debería ser ~30-50MB con todos los frameworks."
+                echo "Verificando frameworks incluidos..."
+                unzip -l "$IPA_PATH" | grep -E "(Frameworks|\.framework)" | head -20
+              else
+                echo "✅ Tamaño del IPA parece correcto (${IPA_SIZE_MB}MB)"
               fi
             else
               echo "⚠️ IPA no encontrado en $IPA_PATH, buscando..."
