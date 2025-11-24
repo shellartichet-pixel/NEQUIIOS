@@ -27,7 +27,6 @@
 		B1B1B1B1B1B1 /* NequixiOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NequixiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2A2A2A2A2A2 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		A4A4A4A4A4A4 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		A6A6A6A6A6A6 /* ServiciosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiciosView.swift; sourceTree = "<group>"; };
 		V1V1V1V1V1V1 /* Views */ = {isa = PBXGroup; children = (V2V2V2V2V2V2 /* ServiciosView.swift */, V3V3V3V3V3V3 /* HomeView.swift */, V4V4V4V4V4V4 /* LoginView.swift */, V5V5V5V5V5V5 /* MainTabView.swift */, V6V6V6V6V6V6 /* MovementsView.swift */, V7V7V7V7V7V7 /* PinView.swift */, V8V8V8V8V8V8 /* SendMoneyView.swift */, V9V9V9V9V9V9 /* SplashView.swift */); path = Views; sourceTree = "<group>"; };
 		V2V2V2V2V2V2 /* ServiciosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/ServiciosView.swift"; sourceTree = "<group>"; };
 		V3V3V3V3V3V3 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/HomeView.swift"; sourceTree = "<group>"; };
