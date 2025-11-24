@@ -8,6 +8,7 @@ workflows:
       ios_signing:
         distribution_type: ad_hoc
         bundle_identifier: com.ios.nequixofficialv2
+      flutter: none
       
       vars:
         XCODE_WORKSPACE: "iosApp/NequixiOS.xcworkspace"
@@ -40,22 +41,32 @@ workflows:
           
       - name: Build IPA
         script: |
-          xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME" \
-            --export-options-plist iosApp/ExportOptions.plist || \
+          mkdir -p build/ios/ipa
+          
+          # Intentar build normal primero
           xcodebuild -workspace "$XCODE_WORKSPACE" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -archivePath build/archive.xcarchive \
-            archive CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO && \
-          xcodebuild -exportArchive \
+            -destination "generic/platform=iOS" \
+            archive CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO || \
+          xcodebuild -workspace "$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
             -archivePath build/archive.xcarchive \
-            -exportPath build/ios/ipa \
-            -exportOptionsPlist iosApp/ExportOptions.plist || \
-          mkdir -p build/ios/ipa/Payload && \
-          cp -R build/archive.xcarchive/Products/Applications/*.app build/ios/ipa/Payload/ && \
-          cd build/ios/ipa && zip -r ../NequixiOS.ipa Payload
+            -destination "generic/platform=iOS" \
+            archive
+          
+          # Exportar IPA
+          if [ -d "build/archive.xcarchive" ]; then
+            xcodebuild -exportArchive \
+              -archivePath build/archive.xcarchive \
+              -exportPath build/ios/ipa \
+              -exportOptionsPlist iosApp/ExportOptions.plist || \
+            (mkdir -p build/ios/ipa/Payload && \
+             cp -R build/archive.xcarchive/Products/Applications/*.app build/ios/ipa/Payload/ && \
+             cd build/ios/ipa && zip -r ../NequixiOS.ipa Payload && cd ../..)
+          fi
             
     artifacts:
       - build/ios/ipa/*.ipa
