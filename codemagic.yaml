@@ -5,14 +5,14 @@ workflows:
     instance_type: mac_mini_m1
     
     environment:
-      # FIRMA AUTOMÁTICA - Configura certificados en Settings → Code signing
-      ios_signing:
-        distribution_type: ad_hoc  # Cambia a "app_store" si quieres subir a App Store
-        bundle_identifier: com.ios.nequixofficialv2  # Bundle ID de la app
-        # Los certificados se configuran en Codemagic Settings → Code signing
-        # 1. Ve a Settings → Code signing
-        # 2. Sube tu certificado (.p12) y contraseña
-        # 3. Sube tu perfil de aprovisionamiento (.mobileprovision)
+      # NO configurar ios_signing - el IPA se genera sin firmar
+      # Para firmarlo después, usa Sideloadly o configura certificados en Settings
+      # Si quieres firma automática, configura certificados en Settings → Code signing
+      # y luego descomenta la sección ios_signing abajo
+      
+      # ios_signing:
+      #   distribution_type: ad_hoc
+      #   bundle_identifier: com.ios.nequixofficialv2
       
       vars:
         XCODE_WORKSPACE: "iosApp/NequixiOS.xcworkspace"
