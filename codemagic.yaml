@@ -180,9 +180,34 @@ workflows:
           echo "📦 Verificando archive creado..."
           if [ -d "build/archive.xcarchive/Products/Applications" ]; then
             APP_NAME=$(ls build/archive.xcarchive/Products/Applications/ | head -1)
+            APP_PATH="build/archive.xcarchive/Products/Applications/$APP_NAME"
             echo "✅ App encontrada: $APP_NAME"
+            
+            # Verificar tamaño del .app (debe ser al menos varios MB)
+            APP_SIZE=$(du -sm "$APP_PATH" | cut -f1)
+            echo "📊 Tamaño del .app: ${APP_SIZE}MB"
+            
+            if [ "$APP_SIZE" -lt 1 ]; then
+              echo "⚠️ ADVERTENCIA: El .app es muy pequeño (${APP_SIZE}MB). Verificando contenido..."
+              echo "Contenido del .app:"
+              ls -lh "$APP_PATH" || true
+              echo "Frameworks:"
+              ls -lh "$APP_PATH/Frameworks" 2>/dev/null || echo "⚠️ No se encontró carpeta Frameworks"
+              echo "Recursos:"
+              ls -lh "$APP_PATH"/*.plist 2>/dev/null || echo "⚠️ No se encontraron plists"
+            fi
+            
+            # Verificar que el shared framework esté incluido
+            if [ -d "$APP_PATH/Frameworks/shared.framework" ]; then
+              echo "✅ Framework compartido encontrado"
+              ls -lh "$APP_PATH/Frameworks/shared.framework" | head -5
+            else
+              echo "⚠️ ADVERTENCIA: Framework compartido NO encontrado en Frameworks/"
+              find "$APP_PATH" -name "shared.framework" -type d || echo "No se encontró shared.framework en ningún lugar"
+            fi
+            
             mkdir -p build/ios/ipa/Payload
-            cp -R "build/archive.xcarchive/Products/Applications/$APP_NAME" build/ios/ipa/Payload/
+            cp -R "$APP_PATH" build/ios/ipa/Payload/
             cd build/ios/ipa
             zip -r ../NequixiOS.ipa Payload
             cd ../../..
@@ -190,8 +215,16 @@ workflows:
             echo "✅ IPA creado: $IPA_PATH"
             # Verificar que el IPA existe
             if [ -f "$IPA_PATH" ]; then
+              IPA_SIZE=$(du -h "$IPA_PATH" | cut -f1)
+              IPA_SIZE_MB=$(du -sm "$IPA_PATH" | cut -f1)
               ls -lh "$IPA_PATH"
-              echo "✅ IPA verificado correctamente - Tamaño: $(du -h "$IPA_PATH" | cut -f1)"
+              echo "✅ IPA verificado correctamente - Tamaño: ${IPA_SIZE} (${IPA_SIZE_MB}MB)"
+              
+              if [ "$IPA_SIZE_MB" -lt 5 ]; then
+                echo "⚠️ ADVERTENCIA: El IPA es muy pequeño (${IPA_SIZE_MB}MB). Puede faltar contenido."
+                echo "Verificando contenido del IPA..."
+                unzip -l "$IPA_PATH" | head -30
+              fi
             else
               echo "⚠️ IPA no encontrado en $IPA_PATH, buscando..."
               FOUND_IPA=$(find build -name "*.ipa" -type f | head -1)

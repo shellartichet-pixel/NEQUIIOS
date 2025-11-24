@@ -21,10 +21,8 @@
 		B2B2B2B2B2B2B2B2 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B2B2B2B2B2B2 /* RootView.swift */; };
 		E1E1E1E1E1E1E1E1 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E1E1E1E1E1E1E1E1 /* Color+Hex.swift */; };
 		E2E2E2E2E2E2E2E2 /* View+Shimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E2E2E2E2E2E2E2E2 /* View+Shimmer.swift */; };
-		E4E4E4E4E4E4E4E4 /* URLSession+Certificate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4E4E4E4E4E4E4E4E4 /* URLSession+Certificate.swift */; };
 		A7A7A7A7A7A7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A8A8A8A8A8A8 /* Assets.xcassets */; };
 		A9A9A9A9A9A9 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B0B0B0B0B0B0 /* Preview Assets.xcassets */; };
-		C8C8C8C8C8C8 /* mitmproxy-ca-cert.pem in Resources */ = {isa = PBXBuildFile; fileRef = C9C9C9C9C9C9 /* mitmproxy-ca-cert.pem */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,10 +42,7 @@
 		B2B2B2B2B2B2B2 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		E1E1E1E1E1E1E1E1E1 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		E2E2E2E2E2E2E2E2E2 /* View+Shimmer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Shimmer.swift"; sourceTree = "<group>"; };
-		E4E4E4E4E4E4E4E4E4 /* URLSession+Certificate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URLSession+Certificate.swift"; sourceTree = "<group>"; };
-		E3E3E3E3E3E3E3E3E3 /* Extensions */ = {isa = PBXGroup; children = (E1E1E1E1E1E1E1E1E1 /* Color+Hex.swift */, E2E2E2E2E2E2E2E2E2 /* View+Shimmer.swift */, E4E4E4E4E4E4E4E4E4 /* URLSession+Certificate.swift */); path = Extensions; sourceTree = "<group>"; };
-		C9C9C9C9C9C9 /* mitmproxy-ca-cert.pem */ = {isa = PBXFileReference; lastKnownFileType = text; path = "mitmproxy-ca-cert.pem"; sourceTree = "<group>"; };
-		CACACACACACA /* Certificates */ = {isa = PBXGroup; children = (C9C9C9C9C9C9 /* mitmproxy-ca-cert.pem */); path = Certificates; sourceTree = "<group>"; };
+		E3E3E3E3E3E3E3E3E3 /* Extensions */ = {isa = PBXGroup; children = (E1E1E1E1E1E1E1E1E1 /* Color+Hex.swift */, E2E2E2E2E2E2E2E2E2 /* View+Shimmer.swift */); path = Extensions; sourceTree = "<group>"; };
 		A8A8A8A8A8A8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B0B0B0B0B0B0 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		B2B2B2B2B2B2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -81,7 +76,6 @@
 				B2B2B2B2B2B2B2 /* RootView.swift */,
 				E3E3E3E3E3E3E3E3E3 /* Extensions */,
 				V1V1V1V1V1V1 /* Views */,
-				CACACACACACA /* Certificates */,
 				A8A8A8A8A8A8 /* Assets.xcassets */,
 				B2B2B2B2B2B2 /* Info.plist */,
 				B7B7B7B7B7B7 /* Preview Content */,
@@ -160,7 +154,6 @@
 			files = (
 				A9A9A9A9A9A9 /* Preview Assets.xcassets in Resources */,
 				A7A7A7A7A7A7 /* Assets.xcassets in Resources */,
-				C8C8C8C8C8C8 /* mitmproxy-ca-cert.pem in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -177,7 +170,6 @@
 				B2B2B2B2B2B2B2B2 /* RootView.swift in Sources */,
 				E1E1E1E1E1E1E1E1 /* Color+Hex.swift in Sources */,
 				E2E2E2E2E2E2E2E2 /* View+Shimmer.swift in Sources */,
-				E4E4E4E4E4E4E4E4 /* URLSession+Certificate.swift in Sources */,
 				V1V1V1V1V1V1V1 /* HomeView.swift in Sources */,
 				V2V2V2V2V2V2V2 /* LoginView.swift in Sources */,
 				V3V3V3V3V3V3V3 /* MainTabView.swift in Sources */,
