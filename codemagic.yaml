@@ -61,11 +61,8 @@ workflows:
             # Agregar verificación de variables antes de usar source
             sed -i '' 's/source "$SCRIPT_INPUT_FILE_0"/[ -f "$SCRIPT_INPUT_FILE_0" ] \&\& source "$SCRIPT_INPUT_FILE_0"/g' "$FRAMEWORKS_SCRIPT" || \
             sed -i 's/source "$SCRIPT_INPUT_FILE_0"/[ -f "$SCRIPT_INPUT_FILE_0" ] \&\& source "$SCRIPT_INPUT_FILE_0"/g' "$FRAMEWORKS_SCRIPT" || true
-            # Deshabilitar modo estricto en el script
-            sed -i '' '1a\
-set +u
-' "$FRAMEWORKS_SCRIPT" || \
-            sed -i '1a set +u' "$FRAMEWORKS_SCRIPT" || true
+            # Deshabilitar modo estricto en el script - usar echo en lugar de sed con newline
+            echo -e "set +u\n$(cat $FRAMEWORKS_SCRIPT)" > "$FRAMEWORKS_SCRIPT.tmp" && mv "$FRAMEWORKS_SCRIPT.tmp" "$FRAMEWORKS_SCRIPT" || true
             echo "✅ Script corregido"
           fi
           cd ..
