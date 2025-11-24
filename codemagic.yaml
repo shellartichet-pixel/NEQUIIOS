@@ -30,6 +30,14 @@ workflows:
           cd iosApp
           pod install --repo-update
           
+      - name: Disable automatic signing in Xcode project
+        script: |
+          # Modificar el proyecto para deshabilitar signing
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$XCODE_PROJECT/project.pbxproj" || \
+          sed -i 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$XCODE_PROJECT/project.pbxproj" || true
+          sed -i '' 's/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g' "$XCODE_PROJECT/project.pbxproj" || \
+          sed -i 's/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g' "$XCODE_PROJECT/project.pbxproj" || true
+          
       - name: Build IPA without signing
         script: |
           mkdir -p build/ios/ipa
@@ -43,8 +51,10 @@ workflows:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_STYLE=Manual \
             PROVISIONING_PROFILE_SPECIFIER="" \
             PROVISIONING_PROFILE="" \
+            DEVELOPMENT_TEAM="" \
             archive || exit 1
           
           # Crear IPA manualmente desde el archive
