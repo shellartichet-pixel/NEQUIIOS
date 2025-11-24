@@ -132,7 +132,7 @@ struct LoginView: View {
     
     private func signInAnonymously(phone: String, documentId: String) {
         Auth.auth().signInAnonymously { result, error in
-            if let error = error {
+            if error != nil {
                 isLoading = false
                 errorMessage = "Error de autenticación"
                 showError = true
