@@ -13,7 +13,7 @@ workflows:
         XCODE_SCHEME: "NequixiOS"
         XCODE_PROJECT: "iosApp/NequixiOS.xcodeproj"
         
-      xcode: 15.4
+      xcode: latest
       cocoapods: default
       
     scripts:
