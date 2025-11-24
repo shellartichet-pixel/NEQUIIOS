@@ -22,19 +22,22 @@ post_install do |installer|
     # Estos bundles no tienen ejecutables, por lo que CopySwiftLibs falla
     if target.name.end_with?('_Privacy')
       puts "  Corrigiendo target: #{target.name}"
+      # Obtener todos los build phases
       phases_to_remove = []
-      target.build_phases.each do |phase|
-        # Buscar y eliminar el build phase CopySwiftLibs
-        if phase.is_a?(Xcodeproj::Project::Object::PBXCopyFilesBuildPhase)
-          # CopySwiftLibs tiene dst_subfolder_spec == 16
-          if phase.dst_subfolder_spec == 16
-            puts "    Removiendo CopySwiftLibs de #{target.name}"
-            phases_to_remove << phase
-          end
+      target.build_phases.each_with_index do |phase, index|
+        # Buscar CopySwiftLibs por tipo y dst_subfolder_spec
+        if phase.respond_to?(:dst_subfolder_spec) && phase.dst_subfolder_spec == 16
+          puts "    Removiendo CopySwiftLibs (dst_subfolder_spec=16) de #{target.name}"
+          phases_to_remove << phase
+        elsif phase.respond_to?(:name) && phase.name == 'CopySwiftLibs'
+          puts "    Removiendo CopySwiftLibs (por nombre) de #{target.name}"
+          phases_to_remove << phase
         end
       end
-      # Eliminar los phases después de iterar
-      phases_to_remove.each { |phase| target.build_phases.delete(phase) }
+      # Eliminar los phases
+      phases_to_remove.each do |phase|
+        target.build_phases.delete(phase)
+      end
     end
   end
   

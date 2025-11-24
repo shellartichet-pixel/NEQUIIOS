@@ -106,11 +106,84 @@ workflows:
             fi
           fi
           
-          # Verificar que el fix del Podfile se aplicó correctamente
-          echo "🔍 Verificando que CopySwiftLibs fue removido de targets _Privacy..."
-          if [ -f "iosApp/Pods/Pods.xcodeproj/project.pbxproj" ]; then
-            PRIVACY_TARGETS=$(grep -c "nanopb-nanopb_Privacy\|leveldb-library-leveldb_Privacy" iosApp/Pods/Pods.xcodeproj/project.pbxproj || echo "0")
-            echo "  Targets _Privacy encontrados en proyecto: $PRIVACY_TARGETS"
+          # Fix directo: eliminar CopySwiftLibs de targets _Privacy modificando project.pbxproj
+          echo "🔧 Aplicando fix directo para CopySwiftLibs en targets _Privacy..."
+          if [ -f "Pods/Pods.xcodeproj/project.pbxproj" ]; then
+            # Crear backup
+            cp Pods/Pods.xcodeproj/project.pbxproj Pods/Pods.xcodeproj/project.pbxproj.backup
+            
+            # Usar Python para modificar el archivo de forma segura
+            python3 << 'PYTHON_SCRIPT'
+import re
+import sys
+
+try:
+    with open('Pods/Pods.xcodeproj/project.pbxproj', 'r') as f:
+        content = f.read()
+    
+    original_content = content
+    
+    # Buscar targets que terminan en _Privacy
+    # Patrón: buscar la sección del target y encontrar CopySwiftLibs build phase
+    # Necesitamos encontrar el UUID del build phase CopySwiftLibs dentro de cada target _Privacy
+    
+    # Estrategia: encontrar todos los targets _Privacy y sus build phases
+    # Luego buscar CopySwiftLibs phases con dst_subfolder_spec = 16
+    
+    # Buscar todas las referencias a CopySwiftLibs que están dentro de targets _Privacy
+    # El patrón es: /* CopySwiftLibs */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = ...; dstPath = ""; dstSubfolderSpec = 16; ...};
+    
+    # Encontrar todos los UUIDs de CopySwiftLibs phases
+    copy_swift_libs_phases = re.findall(r'([A-F0-9]{24}) /\* CopySwiftLibs \*/ = \{', content)
+    
+    if copy_swift_libs_phases:
+        print(f"  Encontrados {len(copy_swift_libs_phases)} CopySwiftLibs phases")
+        
+        # Para cada target _Privacy, encontrar si tiene una referencia a CopySwiftLibs
+        # Buscar targets que terminan en _Privacy
+        privacy_targets = re.findall(r'([A-F0-9]{24}) /\* (.*_Privacy) \*/ = \{', content)
+        
+        for target_uuid, target_name in privacy_targets:
+            print(f"  Procesando target: {target_name} ({target_uuid})")
+            
+            # Buscar la sección buildPhases de este target
+            # Patrón: target_uuid /* target_name */ = { ... buildPhases = ( ... ); ... };
+            target_pattern = rf'({target_uuid} /\* {re.escape(target_name)} \*/ = \{{[^}}]*buildPhases = \()([^)]+)(\);'
+            match = re.search(target_pattern, content, re.DOTALL)
+            
+            if match:
+                build_phases_section = match.group(2)
+                # Buscar referencias a CopySwiftLibs en esta sección
+                for phase_uuid in copy_swift_libs_phases:
+                    if phase_uuid in build_phases_section:
+                        print(f"    Removiendo CopySwiftLibs phase {phase_uuid} de {target_name}")
+                        # Remover la línea que contiene esta referencia
+                        build_phases_section = re.sub(rf'\s*{phase_uuid} /\* CopySwiftLibs \*/,?\s*\n?', '', build_phases_section)
+                        # Actualizar el contenido
+                        content = content.replace(match.group(0), match.group(1) + build_phases_section + match.group(3))
+    
+    # También eliminar las definiciones de CopySwiftLibs phases completamente
+    # Esto evita que Xcode intente ejecutarlas
+    for phase_uuid in copy_swift_libs_phases:
+        # Buscar y comentar la definición completa del phase
+        phase_pattern = rf'({phase_uuid} /\* CopySwiftLibs \*/ = \{{[^}}]+\}};)'
+        if re.search(phase_pattern, content):
+            print(f"  Comentando definición de CopySwiftLibs phase {phase_uuid}")
+            content = re.sub(phase_pattern, r'/* \1 */', content, flags=re.DOTALL)
+    
+    if content != original_content:
+        with open('Pods/Pods.xcodeproj/project.pbxproj', 'w') as f:
+            f.write(content)
+        print("✅ Fix aplicado correctamente")
+    else:
+        print("⚠️ No se encontraron cambios necesarios")
+        
+except Exception as e:
+    print(f"⚠️ Error aplicando fix: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(0)  # No fallar el build
+PYTHON_SCRIPT
           fi
           cd ..
           
