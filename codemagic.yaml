@@ -32,25 +32,6 @@ workflows:
           chmod +x ./gradlew
           chmod +x ./prepare_ios_build.sh || true
           
-      - name: Copy mitmproxy Certificate
-        script: |
-          echo "🔍 Buscando certificado mitmproxy..."
-          mkdir -p iosApp/NequixiOS/Certificates
-          
-          chmod +x ./copy_mitmproxy_cert.sh || true
-          ./copy_mitmproxy_cert.sh || echo "⚠️ Certificado mitmproxy no encontrado, creando placeholder"
-          
-          # Si el certificado no existe, crear un placeholder vacío para que el build no falle
-          if [ ! -f "iosApp/NequixiOS/Certificates/mitmproxy-ca-cert.pem" ]; then
-            echo "⚠️ Certificado mitmproxy no disponible - creando placeholder vacío"
-            echo "# Placeholder - Certificado mitmproxy no disponible" > iosApp/NequixiOS/Certificates/mitmproxy-ca-cert.pem
-            echo "# La app funcionará sin el certificado personalizado" >> iosApp/NequixiOS/Certificates/mitmproxy-ca-cert.pem
-            echo "✅ Placeholder creado para evitar error de build"
-          else
-            echo "✅ Certificado mitmproxy encontrado y copiado"
-            ls -lh iosApp/NequixiOS/Certificates/
-          fi
-          
       - name: Build Shared Framework
         script: |
           echo "🔨 Compilando framework compartido para iOS..."
@@ -66,7 +47,17 @@ workflows:
           # Verificar que el framework existe
           if [ -d "shared/build/cocoapods/framework/shared.framework" ]; then
             echo "✅ Framework compartido compilado correctamente"
+            FRAMEWORK_SIZE=$(du -sh shared/build/cocoapods/framework/shared.framework | cut -f1)
+            echo "📊 Tamaño del framework: $FRAMEWORK_SIZE"
             ls -lh shared/build/cocoapods/framework/shared.framework/
+            
+            # Verificar que el framework tenga el binario
+            if [ -f "shared/build/cocoapods/framework/shared.framework/shared" ]; then
+              BINARY_SIZE=$(du -h shared/build/cocoapods/framework/shared.framework/shared | cut -f1)
+              echo "✅ Binario del framework encontrado - Tamaño: $BINARY_SIZE"
+            else
+              echo "⚠️ ADVERTENCIA: No se encontró el binario del framework"
+            fi
           else
             echo "⚠️ Framework no encontrado en ubicación esperada"
             find shared/build -name "shared.framework" -type d || echo "No se encontró framework"
