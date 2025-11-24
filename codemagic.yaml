@@ -22,14 +22,14 @@ workflows:
       cocoapods: default
       
     scripts:
-      - name: Enable Xcode Automatic Signing
+      - name: Disable Xcode Signing (Build without signing)
         script: |
-          # Habilitar signing automático - Codemagic lo gestionará
-          sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g' "$XCODE_PROJECT/project.pbxproj" || \
-          sed -i 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g' "$XCODE_PROJECT/project.pbxproj" || true
-          sed -i '' 's/CODE_SIGNING_REQUIRED = NO;/CODE_SIGNING_REQUIRED = YES;/g' "$XCODE_PROJECT/project.pbxproj" || \
-          sed -i 's/CODE_SIGNING_REQUIRED = NO;/CODE_SIGNING_REQUIRED = YES;/g' "$XCODE_PROJECT/project.pbxproj" || true
-          echo "✅ Signing automático habilitado"
+          # Deshabilitar signing para evitar errores de perfiles
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$XCODE_PROJECT/project.pbxproj" || \
+          sed -i 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$XCODE_PROJECT/project.pbxproj" || true
+          sed -i '' 's/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g' "$XCODE_PROJECT/project.pbxproj" || \
+          sed -i 's/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g' "$XCODE_PROJECT/project.pbxproj" || true
+          echo "✅ Signing deshabilitado - IPA se generará sin firmar"
           
       - name: Prepare iOS Build
         script: |
