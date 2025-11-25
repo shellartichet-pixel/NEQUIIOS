@@ -5,12 +5,9 @@ workflows:
     instance_type: mac_mini_m1
     
     environment:
-      # FIRMA AUTOMÁTICA - Codemagic usará los certificados configurados en Settings → Code signing
-      # Para AppTzio y distribución, necesitamos un IPA firmado correctamente
-      ios_signing:
-        distribution_type: ad_hoc  # ad_hoc para instalación directa, app_store para App Store
-        bundle_identifier: com.ios.nequixofficialv2  # Bundle ID requerido para firma
-        # Los certificados deben estar configurados en Codemagic → Settings → Code signing
+      # NO configurar ios_signing - El IPA se generará sin firmar
+      # AppTzio firmará automáticamente el IPA al instalarlo
+      # Esto evita errores de perfiles de aprovisionamiento faltantes
       
       vars:
         XCODE_WORKSPACE: "iosApp/NequixiOS.xcworkspace"
@@ -21,12 +18,16 @@ workflows:
       xcode: 15.0
       
     scripts:
-      - name: Verify Code Signing Configuration
+      - name: Disable Code Signing (IPA sin firmar para AppTzio)
         script: |
-          echo "🔐 Verificando configuración de firma..."
-          # Codemagic configurará automáticamente la firma si ios_signing está configurado
-          # Solo verificamos que el proyecto esté listo
-          echo "✅ La firma será manejada automáticamente por Codemagic"
+          echo "🔐 Deshabilitando firma - El IPA se generará sin firmar"
+          echo "✅ AppTzio firmará automáticamente el IPA al instalarlo"
+          # Deshabilitar signing en el proyecto Xcode
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$XCODE_PROJECT/project.pbxproj" || \
+          sed -i 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$XCODE_PROJECT/project.pbxproj" || true
+          sed -i '' 's/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g' "$XCODE_PROJECT/project.pbxproj" || \
+          sed -i 's/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g' "$XCODE_PROJECT/project.pbxproj" || true
+          echo "✅ Signing deshabilitado - IPA listo para AppTzio"
           
       - name: Prepare iOS Build
         script: |
@@ -214,13 +215,19 @@ workflows:
           export ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES=YES
           export STRIP_INSTALLED_PRODUCT=NO  # NO stripear para incluir todo
           
-          # Build archive con firma automática de Codemagic
-          # Codemagic maneja automáticamente CODE_SIGN_IDENTITY y PROVISIONING_PROFILE cuando ios_signing está configurado
+          # Build archive SIN firma (AppTzio firmará automáticamente al instalar)
           xcodebuild -workspace "$XCODE_WORKSPACE" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -archivePath build/archive.xcarchive \
             -destination "generic/platform=iOS" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            PROVISIONING_PROFILE="" \
+            DEVELOPMENT_TEAM="" \
             OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED=YES \
             EMBEDDED_CONTENT_CONTAINS_SWIFT=YES \
             ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES=YES \
