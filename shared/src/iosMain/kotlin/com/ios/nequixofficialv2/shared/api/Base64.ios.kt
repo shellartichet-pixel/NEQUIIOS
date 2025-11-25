@@ -3,6 +3,8 @@ package com.ios.nequixofficialv2.shared.api
 import platform.Foundation.NSData
 import platform.Foundation.NSDataBase64DecodingOptions
 import platform.Foundation.create
+import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.usePinned
 
 /**
@@ -13,9 +15,12 @@ actual fun decodeBase64(input: String): ByteArray {
         ?: throw IllegalArgumentException("Invalid base64 string")
     
     val length = nsData.length.toInt()
-    return ByteArray(length).apply {
-        usePinned { pinned ->
-            nsData.getBytes(pinned.addressOf(0), length = nsData.length)
-        }
+    val bytes = ByteArray(length)
+    
+    bytes.usePinned { pinned ->
+        val pointer = pinned.addressOf(0) as platform.darwin.UnsafeMutablePointer<ByteVar>
+        nsData.getBytes(pointer, length = nsData.length)
     }
+    
+    return bytes
 }
