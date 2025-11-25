@@ -1,98 +1,106 @@
 #!/usr/bin/env python3
 """
-Script para eliminar CopySwiftLibs build phases de targets _Privacy
-Esto corrige el error de build donde CopySwiftLibs intenta copiar un ejecutable que no existe
+Script para eliminar CopySwiftLibs de targets _Privacy en Pods.xcodeproj
+Estos bundles no tienen ejecutables, por lo que CopySwiftLibs falla
 """
 import re
 import sys
-import os
 
-# Cambiar al directorio del script si es necesario
-script_dir = os.path.dirname(os.path.abspath(__file__))
-os.chdir(script_dir)
-
-project_file = 'Pods/Pods.xcodeproj/project.pbxproj'
-
-if not os.path.exists(project_file):
-    print(f"❌ Error: {project_file} no encontrado")
-    print(f"   Directorio actual: {os.getcwd()}")
-    print(f"   Archivos en directorio: {os.listdir('.')}")
-    sys.exit(0)
-
-try:
-    print(f"📖 Leyendo {project_file}...")
-    with open(project_file, 'r') as f:
-        content = f.read()
-    
-    original_content = content
-    changes_made = False
-    
-    # Estrategia: encontrar y eliminar todas las referencias a CopySwiftLibs
-    
-    # 1. Encontrar todos los UUIDs de CopySwiftLibs phases
-    copy_swift_libs_pattern = r'([A-F0-9]{24}) /\* CopySwiftLibs \*/ = \{'
-    copy_swift_libs_phases = re.findall(copy_swift_libs_pattern, content)
-    
-    print(f"🔍 Encontrados {len(copy_swift_libs_phases)} CopySwiftLibs phases: {copy_swift_libs_phases}")
-    
-    if copy_swift_libs_phases:
-        # 2. Eliminar referencias en buildPhases de TODOS los targets
-        # Estrategia: eliminar todas las líneas que contengan el UUID y CopySwiftLibs
-        for phase_uuid in copy_swift_libs_phases:
-            # Buscar y eliminar líneas que contengan el UUID y CopySwiftLibs
-            # Esto funciona independientemente del formato exacto
-            lines = content.split('\n')
-            new_lines = []
-            removed_count = 0
+def remove_copyswiftlibs_from_privacy_targets(pbxproj_path):
+    """Elimina CopySwiftLibs de todos los targets _Privacy"""
+    try:
+        with open(pbxproj_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        original_content = content
+        
+        # Patrón 1: Eliminar build phases de CopySwiftLibs para targets _Privacy
+        # Buscar secciones que contengan "_Privacy" y "CopySwiftLibs" o "swiftStdLibTool"
+        lines = content.split('\n')
+        new_lines = []
+        skip_next_n_lines = 0
+        in_privacy_target = False
+        in_copyswiftlibs_phase = False
+        brace_count = 0
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i]
             
-            for line in lines:
-                # Si la línea contiene el UUID y CopySwiftLibs, omitirla
-                if phase_uuid in line and 'CopySwiftLibs' in line:
-                    removed_count += 1
-                    print(f"  ✅ Removida línea: {line.strip()[:80]}...")
-                    continue
+            # Detectar si estamos en un target _Privacy
+            if '_Privacy' in line and 'isa = PBXNativeTarget' in lines[max(0, i-5):i+1]:
+                in_privacy_target = True
                 new_lines.append(line)
+                i += 1
+                continue
             
-            if removed_count > 0:
-                content = '\n'.join(new_lines)
-                changes_made = True
-                print(f"  ✅ Removidas {removed_count} líneas con CopySwiftLibs phase {phase_uuid}")
+            # Si estamos en un target _Privacy, buscar CopySwiftLibs
+            if in_privacy_target:
+                # Detectar inicio de buildPhases
+                if 'buildPhases = (' in line:
+                    brace_count = line.count('(') - line.count(')')
+                    new_lines.append(line)
+                    i += 1
+                    continue
+                
+                # Detectar CopySwiftLibs build phase
+                if 'CopySwiftLibs' in line or 'swiftStdLibTool' in line:
+                    in_copyswiftlibs_phase = True
+                    brace_count = 0
+                    # No agregar esta línea, saltarla
+                    i += 1
+                    continue
+                
+                # Si estamos en un CopySwiftLibs phase, saltar hasta el final
+                if in_copyswiftlibs_phase:
+                    brace_count += line.count('(') - line.count(')')
+                    if brace_count <= 0 and ');' in line:
+                        in_copyswiftlibs_phase = False
+                        # Saltar la línea de cierre también
+                        i += 1
+                        continue
+                    i += 1
+                    continue
+                
+                # Si encontramos el final del target, resetear
+                if '};' in line and in_privacy_target and not in_copyswiftlibs_phase:
+                    in_privacy_target = False
+            
+            new_lines.append(line)
+            i += 1
         
-        # 3. Comentar las definiciones completas de CopySwiftLibs phases
-        for phase_uuid in copy_swift_libs_phases:
-            # Buscar la definición completa del phase
-            # Patrón más flexible: UUID /* CopySwiftLibs */ = { ... };
-            phase_def_pattern = rf'({phase_uuid} /\* CopySwiftLibs \*/ = \{{[^}}]+\}};)'
-            def_match = re.search(phase_def_pattern, content, re.DOTALL)
-            if def_match:
-                # Comentar toda la definición
-                commented = f'/* {def_match.group(1)} */'
-                content = content.replace(def_match.group(0), commented)
-                print(f"  ✅ Comentada definición de CopySwiftLibs phase {phase_uuid}")
-                changes_made = True
-    
-    # 4. Verificar que no queden referencias
-    remaining_refs = re.findall(r'CopySwiftLibs', content)
-    if remaining_refs:
-        print(f"⚠️ Advertencia: Aún quedan {len(remaining_refs)} referencias a CopySwiftLibs")
-    
-    if changes_made:
-        # Crear backup
-        backup_file = f'{project_file}.backup'
-        with open(backup_file, 'w') as f:
-            f.write(original_content)
+        content = '\n'.join(new_lines)
         
-        # Guardar cambios
-        with open(project_file, 'w') as f:
-            f.write(content)
-        print("✅ Fix aplicado correctamente - CopySwiftLibs removido de todos los targets")
-        print(f"   Backup guardado en: {backup_file}")
-    else:
-        print("⚠️ No se encontraron cambios necesarios (puede que ya estén removidos)")
+        # Patrón 2: Eliminar referencias a CopySwiftLibs en secciones de buildPhases
+        # Buscar y eliminar líneas que contengan CopySwiftLibs y _Privacy
+        content = re.sub(r'^\s*[A-F0-9]+\s*/\* CopySwiftLibs.*_Privacy.*\*/,\s*$', '', content, flags=re.MULTILINE)
+        content = re.sub(r'^\s*[A-F0-9]+\s*/\* CopySwiftLibs.*Privacy.*\*/,\s*$', '', content, flags=re.MULTILINE)
         
-except Exception as e:
-    print(f"❌ Error aplicando fix: {e}")
-    import traceback
-    traceback.print_exc()
-    sys.exit(0)  # No fallar el build
+        # Patrón 3: Eliminar referencias a swiftStdLibTool para _Privacy
+        content = re.sub(r'builtin-swiftStdLibTool.*nanopb_Privacy.*\n', '', content)
+        content = re.sub(r'builtin-swiftStdLibTool.*leveldb_Privacy.*\n', '', content)
+        content = re.sub(r'CopySwiftLibs.*_Privacy\.bundle.*\n', '', content)
+        
+        # Limpiar líneas vacías múltiples
+        content = re.sub(r'\n\n\n+', '\n\n', content)
+        
+        if content != original_content:
+            with open(pbxproj_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            print(f"✅ Eliminado CopySwiftLibs de targets _Privacy en {pbxproj_path}")
+            return True
+        else:
+            print(f"⚠️ No se encontraron cambios necesarios en {pbxproj_path}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error procesando {pbxproj_path}: {e}")
+        return False
 
+if __name__ == '__main__':
+    pbxproj_path = 'Pods/Pods.xcodeproj/project.pbxproj'
+    if len(sys.argv) > 1:
+        pbxproj_path = sys.argv[1]
+    
+    success = remove_copyswiftlibs_from_privacy_targets(pbxproj_path)
+    sys.exit(0 if success else 1)

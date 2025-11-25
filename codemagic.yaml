@@ -154,26 +154,52 @@ workflows:
             fi
           fi
           
-          # Fix CRÍTICO: Eliminar CopySwiftLibs de targets _Privacy directamente en project.pbxproj
+          # Fix CRÍTICO: Eliminar CopySwiftLibs de targets _Privacy usando script Python
           echo "🔧 Aplicando fix CRÍTICO para CopySwiftLibs en targets _Privacy..."
           if [ -f "Pods/Pods.xcodeproj/project.pbxproj" ]; then
-            echo "  Eliminando CopySwiftLibs de project.pbxproj..."
-            # Buscar y eliminar líneas que contengan CopySwiftLibs para targets _Privacy
-            sed -i '' '/nanopb_Privacy\|.*_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || \
-            sed -i '/nanopb_Privacy\|.*_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || true
-            
-            # También eliminar referencias a swiftStdLibTool para estos targets
-            sed -i '' '/nanopb_Privacy.*swiftStdLibTool/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || \
-            sed -i '/nanopb_Privacy.*swiftStdLibTool/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || true
-            
+            # Usar script Python para eliminar CopySwiftLibs
+            if [ -f "fix_copyswiftlibs.py" ]; then
+              echo "  Ejecutando fix_copyswiftlibs.py..."
+              python3 fix_copyswiftlibs.py || echo "⚠️ Error ejecutando fix script"
+            elif [ -f "../fix_copyswiftlibs.py" ]; then
+              echo "  Ejecutando fix_copyswiftlibs.py desde directorio padre..."
+              python3 ../fix_copyswiftlibs.py || echo "⚠️ Error ejecutando fix script"
+            else
+              echo "  Creando fix_copyswiftlibs.py..."
+              cat > fix_copyswiftlibs.py << 'PYTHON_EOF'
+#!/usr/bin/env python3
+import re
+import sys
+
+def fix_pbxproj(pbxproj_path):
+    with open(pbxproj_path, 'r') as f:
+        content = f.read()
+    
+    original = content
+    
+    # Eliminar CopySwiftLibs para _Privacy targets
+    content = re.sub(r'^\s*[A-F0-9]+\s*/\* CopySwiftLibs.*_Privacy.*\*/,\s*$', '', content, flags=re.MULTILINE)
+    content = re.sub(r'builtin-swiftStdLibTool.*nanopb_Privacy[^\n]*\n', '', content)
+    content = re.sub(r'builtin-swiftStdLibTool.*leveldb_Privacy[^\n]*\n', '', content)
+    content = re.sub(r'CopySwiftLibs.*_Privacy\.bundle[^\n]*\n', '', content)
+    
+    if content != original:
+        with open(pbxproj_path, 'w') as f:
+            f.write(content)
+        print("✅ Fix aplicado")
+        return True
+    return False
+
+if __name__ == '__main__':
+    fix_pbxproj('Pods/Pods.xcodeproj/project.pbxproj')
+PYTHON_EOF
+              chmod +x fix_copyswiftlibs.py
+              python3 fix_copyswiftlibs.py || echo "⚠️ Error ejecutando fix script"
+            fi
             echo "✅ Fix aplicado a project.pbxproj"
           else
             echo "⚠️ Pods/Pods.xcodeproj/project.pbxproj no encontrado"
           fi
-          
-          # Re-ejecutar pod install para asegurar que los cambios se apliquen
-          echo "🔄 Re-ejecutando pod install para aplicar fixes..."
-          pod install --repo-update || echo "⚠️ Error en pod install, continuando..."
           cd ..
           
       - name: Pre-build shared framework for CocoaPods
