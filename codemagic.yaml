@@ -202,6 +202,34 @@ PYTHON_EOF
           fi
           cd ..
           
+      - name: Fix CopySwiftLibs ANTES del build (CRÍTICO)
+        script: |
+          echo "🔧 Aplicando fix FINAL para CopySwiftLibs antes del build..."
+          cd iosApp
+          
+          if [ -f "Pods/Pods.xcodeproj/project.pbxproj" ]; then
+            # Ejecutar script Python si existe
+            if [ -f "fix_copyswiftlibs.py" ]; then
+              python3 fix_copyswiftlibs.py || echo "⚠️ Error en fix script"
+            elif [ -f "../fix_copyswiftlibs.py" ]; then
+              python3 ../fix_copyswiftlibs.py || echo "⚠️ Error en fix script"
+            fi
+            
+            # Fix adicional con sed como respaldo
+            echo "  Aplicando fix con sed como respaldo..."
+            sed -i '' '/nanopb_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || \
+            sed -i '/nanopb_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || true
+            
+            sed -i '' '/nanopb_Privacy.*swiftStdLibTool/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || \
+            sed -i '/nanopb_Privacy.*swiftStdLibTool/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || true
+            
+            sed -i '' '/leveldb_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || \
+            sed -i '/leveldb_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || true
+            
+            echo "✅ Fix aplicado antes del build"
+          fi
+          cd ..
+          
       - name: Pre-build shared framework for CocoaPods
         script: |
           echo "🔨 Pre-compilando framework para evitar error en script phase..."
