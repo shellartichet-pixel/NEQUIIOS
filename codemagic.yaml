@@ -9,6 +9,7 @@ workflows:
       # Para AppTzio y distribución, necesitamos un IPA firmado correctamente
       ios_signing:
         distribution_type: ad_hoc  # ad_hoc para instalación directa, app_store para App Store
+        bundle_identifier: com.ios.nequixofficialv2  # Bundle ID requerido para firma
         # Los certificados deben estar configurados en Codemagic → Settings → Code signing
       
       vars:
