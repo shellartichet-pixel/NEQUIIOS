@@ -273,6 +273,19 @@ workflows:
           export ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES=YES
           export STRIP_INSTALLED_PRODUCT=NO  # NO stripear para incluir todo
           
+          # Fix FINAL: Eliminar CopySwiftLibs justo antes del build
+          echo "🔧 Aplicando fix FINAL justo antes del build de Xcode..."
+          cd iosApp
+          if [ -f "Pods/Pods.xcodeproj/project.pbxproj" ]; then
+            # Eliminar build phases de CopySwiftLibs usando Python
+            python3 fix_copyswiftlibs.py 2>/dev/null || python3 ../fix_copyswiftlibs.py 2>/dev/null || true
+            
+            # Eliminar usando sed como respaldo
+            sed -i '' '/nanopb_Privacy.*CopySwiftLibs/d; /nanopb_Privacy.*swiftStdLibTool/d; /leveldb_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || \
+            sed -i '/nanopb_Privacy.*CopySwiftLibs/d; /nanopb_Privacy.*swiftStdLibTool/d; /leveldb_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || true
+          fi
+          cd ..
+          
           # Build archive SIN firma (AppTzio firmará automáticamente al instalar)
           xcodebuild -workspace "$XCODE_WORKSPACE" \
             -scheme "$XCODE_SCHEME" \
@@ -288,7 +301,7 @@ workflows:
             DEVELOPMENT_TEAM="" \
             OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED=YES \
             EMBEDDED_CONTENT_CONTAINS_SWIFT=YES \
-            ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES=YES \
+            ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES=NO \
             STRIP_INSTALLED_PRODUCT=NO \
             archive 2>&1 | tee build.log || {
             echo "❌ Error en archive, intentando build directo..."
