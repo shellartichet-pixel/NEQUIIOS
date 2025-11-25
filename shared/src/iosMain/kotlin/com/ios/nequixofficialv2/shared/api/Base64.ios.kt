@@ -6,7 +6,7 @@ import platform.Foundation.create
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.usePinned
-import platform.darwin.UnsafeMutablePointer
+import kotlinx.cinterop.addressOf
 
 /**
  * Implementación iOS de decodificación base64
@@ -20,7 +20,7 @@ actual fun decodeBase64(input: String): ByteArray {
     val bytes = ByteArray(length)
     
     bytes.usePinned { pinned ->
-        val pointer: UnsafeMutablePointer<ByteVar> = pinned.addressOf(0)
+        val pointer = pinned.addressOf(0)
         nsData.getBytes(pointer, length = nsData.length)
     }
     
