@@ -842,6 +842,29 @@ workflows:
                 exit 1
               fi
             fi
+            
+            # Mensaje final con ubicación del IPA
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "🎉 ¡BUILD COMPLETADO EXITOSAMENTE! 🎉"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "📦 UBICACIÓN DEL IPA:"
+            echo "   $IPA_PATH"
+            echo ""
+            echo "📥 CÓMO DESCARGAR EL IPA:"
+            echo "   1. Ve a Codemagic → Builds → Tu build"
+            echo "   2. En la sección 'Artifacts' encontrarás:"
+            echo "      - NequixiOS.ipa (el archivo que necesitas)"
+            echo "   3. Haz clic en el IPA para descargarlo"
+            echo ""
+            echo "📱 INSTALAR EN IPHONE:"
+            echo "   1. Sube el IPA a AppTzio"
+            echo "   2. AppTzio lo firmará automáticamente"
+            echo "   3. Instala en tu iPhone usando el enlace de AppTzio"
+            echo ""
+            echo "✅ El IPA está listo y funcionará igual que en Android"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           else
             echo "❌ No se encontró la aplicación en el archive"
             echo "Contenido de archive:"
@@ -853,6 +876,8 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/ipa/NequixiOS.ipa
+      - build/archive.xcarchive
+      - build.log
       
     publishing:
       email:
