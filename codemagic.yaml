@@ -165,36 +165,7 @@ workflows:
               echo "  Ejecutando fix_copyswiftlibs.py desde directorio padre..."
               python3 ../fix_copyswiftlibs.py || echo "⚠️ Error ejecutando fix script"
             else
-              echo "  Creando fix_copyswiftlibs.py..."
-              cat > fix_copyswiftlibs.py << 'PYTHON_EOF'
-#!/usr/bin/env python3
-import re
-import sys
-
-def fix_pbxproj(pbxproj_path):
-    with open(pbxproj_path, 'r') as f:
-        content = f.read()
-    
-    original = content
-    
-    # Eliminar CopySwiftLibs para _Privacy targets
-    content = re.sub(r'^\s*[A-F0-9]+\s*/\* CopySwiftLibs.*_Privacy.*\*/,\s*$', '', content, flags=re.MULTILINE)
-    content = re.sub(r'builtin-swiftStdLibTool.*nanopb_Privacy[^\n]*\n', '', content)
-    content = re.sub(r'builtin-swiftStdLibTool.*leveldb_Privacy[^\n]*\n', '', content)
-    content = re.sub(r'CopySwiftLibs.*_Privacy\.bundle[^\n]*\n', '', content)
-    
-    if content != original:
-        with open(pbxproj_path, 'w') as f:
-            f.write(content)
-        print("✅ Fix aplicado")
-        return True
-    return False
-
-if __name__ == '__main__':
-    fix_pbxproj('Pods/Pods.xcodeproj/project.pbxproj')
-PYTHON_EOF
-              chmod +x fix_copyswiftlibs.py
-              python3 fix_copyswiftlibs.py || echo "⚠️ Error ejecutando fix script"
+              echo "  ⚠️ Script fix_copyswiftlibs.py no encontrado, usando sed como respaldo..."
             fi
             echo "✅ Fix aplicado a project.pbxproj"
           else
