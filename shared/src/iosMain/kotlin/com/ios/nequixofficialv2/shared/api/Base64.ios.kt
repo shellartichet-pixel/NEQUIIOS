@@ -5,9 +5,7 @@ import platform.Foundation.NSDataBase64DecodingOptions
 import platform.Foundation.create
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ByteVar
-import kotlinx.cinterop.usePinned
-import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.toKString
+import kotlinx.cinterop.reinterpret
 
 /**
  * Implementación iOS de decodificación base64 usando NSData
@@ -20,9 +18,13 @@ actual fun decodeBase64(input: String): ByteArray {
     val length = nsData.length.toInt()
     val bytes = ByteArray(length)
     
-    bytes.usePinned { pinned ->
-        val pointer = pinned.addressOf(0) as kotlinx.cinterop.CPointer<ByteVar>
-        nsData.getBytes(pointer, length = nsData.length)
+    // Acceder a los bytes de NSData directamente
+    val dataPointer = nsData.bytes
+    if (dataPointer != null) {
+        val bytePointer = dataPointer.reinterpret<ByteVar>()
+        for (i in 0 until length) {
+            bytes[i] = bytePointer[i]
+        }
     }
     
     return bytes
