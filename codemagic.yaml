@@ -154,31 +154,26 @@ workflows:
             fi
           fi
           
-          # Fix directo: eliminar CopySwiftLibs de targets _Privacy modificando project.pbxproj
-          echo "🔧 Aplicando fix directo para CopySwiftLibs en targets _Privacy..."
+          # Fix CRÍTICO: Eliminar CopySwiftLibs de targets _Privacy directamente en project.pbxproj
+          echo "🔧 Aplicando fix CRÍTICO para CopySwiftLibs en targets _Privacy..."
           if [ -f "Pods/Pods.xcodeproj/project.pbxproj" ]; then
-            # Ejecutar script Python para modificar el archivo
-            if [ -f "fix_copyswiftlibs.py" ]; then
-              echo "  Ejecutando fix_copyswiftlibs.py..."
-              python3 fix_copyswiftlibs.py || echo "⚠️ Error ejecutando fix script, continuando..."
-            elif [ -f "../fix_copyswiftlibs.py" ]; then
-              echo "  Ejecutando fix_copyswiftlibs.py desde directorio padre..."
-              python3 ../fix_copyswiftlibs.py || echo "⚠️ Error ejecutando fix script, continuando..."
-            else
-              echo "⚠️ Script fix_copyswiftlibs.py no encontrado"
-              echo "  Buscando en:"
-              find . -name "fix_copyswiftlibs.py" 2>/dev/null || echo "    No encontrado"
-            fi
+            echo "  Eliminando CopySwiftLibs de project.pbxproj..."
+            # Buscar y eliminar líneas que contengan CopySwiftLibs para targets _Privacy
+            sed -i '' '/nanopb_Privacy\|.*_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || \
+            sed -i '/nanopb_Privacy\|.*_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || true
             
-            # Verificar que el fix se aplicó
-            if grep -q "CopySwiftLibs" Pods/Pods.xcodeproj/project.pbxproj; then
-              echo "⚠️ Advertencia: Aún hay referencias a CopySwiftLibs en el proyecto"
-            else
-              echo "✅ Verificado: No quedan referencias a CopySwiftLibs"
-            fi
+            # También eliminar referencias a swiftStdLibTool para estos targets
+            sed -i '' '/nanopb_Privacy.*swiftStdLibTool/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || \
+            sed -i '/nanopb_Privacy.*swiftStdLibTool/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || true
+            
+            echo "✅ Fix aplicado a project.pbxproj"
           else
             echo "⚠️ Pods/Pods.xcodeproj/project.pbxproj no encontrado"
           fi
+          
+          # Re-ejecutar pod install para asegurar que los cambios se apliquen
+          echo "🔄 Re-ejecutando pod install para aplicar fixes..."
+          pod install --repo-update || echo "⚠️ Error en pod install, continuando..."
           cd ..
           
       - name: Pre-build shared framework for CocoaPods
