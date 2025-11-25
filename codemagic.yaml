@@ -15,7 +15,7 @@ workflows:
         XCODE_PROJECT: "iosApp/NequixiOS.xcodeproj"
         
       cocoapods: default
-      xcode: 15.0
+      xcode: latest
       
     scripts:
       - name: Disable Code Signing (IPA sin firmar para AppTzio)
