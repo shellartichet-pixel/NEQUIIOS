@@ -760,55 +760,32 @@ workflows:
             echo "✅ Funcionará igual que en Android (Kotlin Multiplatform)"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             
-            # Exportar IPA firmado usando Codemagic (método correcto)
-            echo "📦 Exportando IPA firmado con Codemagic..."
-            EXPORT_OPTIONS_PLIST="iosApp/ExportOptions.plist"
+            # Crear IPA manualmente desde el archive
+            echo "📦 Creando IPA desde archive..."
+            mkdir -p build/ios/ipa/Payload
+            cp -R "$APP_PATH" build/ios/ipa/Payload/
             
-            # Verificar que ExportOptions.plist existe
-            if [ ! -f "$EXPORT_OPTIONS_PLIST" ]; then
-              echo "⚠️ ExportOptions.plist no encontrado, usando exportación automática de Codemagic"
-              EXPORT_OPTIONS_PLIST=""
-            fi
+            # Crear el IPA en la ubicación correcta
+            cd build/ios/ipa
+            zip -r NequixiOS.ipa Payload
+            cd ../../..
             
-            # Exportar usando xcodebuild (Codemagic maneja la firma automáticamente)
-            if [ -n "$EXPORT_OPTIONS_PLIST" ] && [ -f "$EXPORT_OPTIONS_PLIST" ]; then
-              echo "📝 Usando ExportOptions.plist para exportar IPA..."
-              xcodebuild -exportArchive \
-                -archivePath build/archive.xcarchive \
-                -exportPath build/ios/ipa \
-                -exportOptionsPlist "$EXPORT_OPTIONS_PLIST" 2>&1 | tee export.log || {
-                echo "⚠️ Error en exportArchive, usando método alternativo..."
-                # Fallback: crear IPA manualmente (ya está firmado por Codemagic durante archive)
-                mkdir -p build/ios/ipa/Payload
-                cp -R "$APP_PATH" build/ios/ipa/Payload/
-                cd build/ios/ipa
-                zip -r ../NequixiOS.ipa Payload
-                cd ../../..
-              }
+            # Verificar que el IPA se creó
+            IPA_PATH="build/ios/ipa/NequixiOS.ipa"
+            if [ -f "$IPA_PATH" ]; then
+              echo "✅ IPA creado correctamente: $IPA_PATH"
             else
-              echo "📝 Creando IPA manualmente desde archive firmado..."
-              mkdir -p build/ios/ipa/Payload
-              cp -R "$APP_PATH" build/ios/ipa/Payload/
-              cd build/ios/ipa
-              zip -r ../NequixiOS.ipa Payload
-              cd ../../..
+              echo "❌ ERROR: El IPA no se creó en $IPA_PATH"
+              echo "Buscando IPA en otras ubicaciones..."
+              find build -name "*.ipa" -type f
+              exit 1
             fi
             
-            # Buscar el IPA exportado
-            IPA_EXPORTED=$(find build/ios/ipa -name "*.ipa" -type f | head -1)
-            if [ -n "$IPA_EXPORTED" ]; then
-              echo "✅ IPA exportado correctamente: $IPA_EXPORTED"
-              mv "$IPA_EXPORTED" build/ios/ipa/NequixiOS.ipa 2>/dev/null || true
-            fi
+            echo "✅ IPA creado - Listo para AppTzio"
             
-            echo "✅ IPA creado y firmado - Listo para AppTzio"
-            
-            # Buscar el IPA generado
-            IPA_PATH=$(find build/ios/ipa -name "*.ipa" -type f | head -1)
-            if [ -z "$IPA_PATH" ]; then
-              IPA_PATH="build/ios/ipa/NequixiOS.ipa"
-            fi
-            echo "✅ IPA creado: $IPA_PATH"
+            # El IPA ya está en la ubicación correcta
+            IPA_PATH="build/ios/ipa/NequixiOS.ipa"
+            echo "✅ IPA ubicado en: $IPA_PATH"
             # Verificar que el IPA existe
             if [ -f "$IPA_PATH" ]; then
               IPA_SIZE=$(du -h "$IPA_PATH" | cut -f1)
@@ -874,10 +851,9 @@ workflows:
           fi
             
     artifacts:
-      - build/ios/ipa/*.ipa
       - build/ios/ipa/NequixiOS.ipa
+      - build/ios/ipa/*.ipa
       - build/archive.xcarchive
-      - build.log
       
     publishing:
       email:
