@@ -7,9 +7,10 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.toKString
 
 /**
- * Implementación iOS de decodificación base64
+ * Implementación iOS de decodificación base64 usando NSData
  */
 @OptIn(ExperimentalForeignApi::class)
 actual fun decodeBase64(input: String): ByteArray {
@@ -20,7 +21,7 @@ actual fun decodeBase64(input: String): ByteArray {
     val bytes = ByteArray(length)
     
     bytes.usePinned { pinned ->
-        val pointer = pinned.addressOf(0)
+        val pointer = pinned.addressOf(0) as kotlinx.cinterop.CPointer<ByteVar>
         nsData.getBytes(pointer, length = nsData.length)
     }
     
