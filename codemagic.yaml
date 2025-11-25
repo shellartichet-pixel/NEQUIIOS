@@ -173,21 +173,23 @@ workflows:
           fi
           cd ..
           
-      - name: Fix CopySwiftLibs ANTES del build (CRÍTICO)
+      - name: Fix CopySwiftLibs ANTES del build (CRÍTICO - MÉTODO AGRESIVO)
         script: |
-          echo "🔧 Aplicando fix FINAL para CopySwiftLibs antes del build..."
+          echo "🔧 Aplicando fix AGRESIVO para CopySwiftLibs antes del build..."
           cd iosApp
           
           if [ -f "Pods/Pods.xcodeproj/project.pbxproj" ]; then
-            # Ejecutar script Python si existe
+            echo "  Eliminando TODAS las referencias a CopySwiftLibs para _Privacy..."
+            
+            # Método 1: Script Python si existe
             if [ -f "fix_copyswiftlibs.py" ]; then
               python3 fix_copyswiftlibs.py || echo "⚠️ Error en fix script"
             elif [ -f "../fix_copyswiftlibs.py" ]; then
               python3 ../fix_copyswiftlibs.py || echo "⚠️ Error en fix script"
             fi
             
-            # Fix adicional con sed como respaldo
-            echo "  Aplicando fix con sed como respaldo..."
+            # Método 2: Eliminar líneas completas que contengan CopySwiftLibs y _Privacy
+            echo "  Eliminando líneas con sed (método agresivo)..."
             sed -i '' '/nanopb_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || \
             sed -i '/nanopb_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || true
             
@@ -197,7 +199,43 @@ workflows:
             sed -i '' '/leveldb_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || \
             sed -i '/leveldb_Privacy.*CopySwiftLibs/d' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || true
             
-            echo "✅ Fix aplicado antes del build"
+            # Método 3: Eliminar build phases completos usando awk (más robusto)
+            echo "  Eliminando build phases completos con awk..."
+            awk '
+            /nanopb_Privacy|leveldb_Privacy/ {
+                in_privacy = 1
+            }
+            in_privacy && /CopySwiftLibs|swiftStdLibTool/ {
+                skip_until_close = 1
+                brace_count = 0
+                next
+            }
+            skip_until_close {
+                brace_count += gsub(/\{/, "") - gsub(/\}/, "")
+                if (brace_count <= 0 && /[;}]/) {
+                    skip_until_close = 0
+                }
+                next
+            }
+            { print }
+            ' Pods/Pods.xcodeproj/project.pbxproj > Pods/Pods.xcodeproj/project.pbxproj.tmp && \
+            mv Pods/Pods.xcodeproj/project.pbxproj.tmp Pods/Pods.xcodeproj/project.pbxproj || echo "⚠️ Error en awk, continuando..."
+            
+            # Método 4: Deshabilitar CopySwiftLibs en build settings directamente
+            echo "  Deshabilitando CopySwiftLibs en build settings..."
+            sed -i '' 's/ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES/ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO/g' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || \
+            sed -i 's/ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES/ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO/g' Pods/Pods.xcodeproj/project.pbxproj 2>/dev/null || true
+            
+            # Verificar que se eliminó
+            if grep -q "nanopb_Privacy.*CopySwiftLibs" Pods/Pods.xcodeproj/project.pbxproj; then
+              echo "⚠️ ADVERTENCIA: Aún hay referencias a CopySwiftLibs"
+            else
+              echo "✅ Verificado: CopySwiftLibs eliminado de nanopb_Privacy"
+            fi
+            
+            echo "✅ Fix agresivo aplicado antes del build"
+          else
+            echo "⚠️ Pods/Pods.xcodeproj/project.pbxproj no encontrado"
           fi
           cd ..
           
