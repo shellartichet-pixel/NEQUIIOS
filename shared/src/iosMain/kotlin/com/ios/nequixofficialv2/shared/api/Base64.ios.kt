@@ -10,14 +10,14 @@ import kotlinx.cinterop.readBytes
 
 /**
  * Implementación iOS de decodificación base64 usando NSData
- * Implementación simplificada que funciona con Kotlin/Native
+ * Usa readBytes que es la forma más simple y directa en Kotlin/Native
  */
 @OptIn(ExperimentalForeignApi::class)
 actual fun decodeBase64(input: String): ByteArray {
     val nsData = NSData.create(base64EncodedString = input, options = NSDataBase64DecodingOptions.MIN_VALUE)
         ?: throw IllegalArgumentException("Invalid base64 string")
     
-    // Usar readBytes que es la forma más simple y directa
+    // Usar readBytes directamente desde el puntero de NSData
     val dataPointer = nsData.bytes
     if (dataPointer != null) {
         val bytePointer = dataPointer.reinterpret<ByteVar>()
