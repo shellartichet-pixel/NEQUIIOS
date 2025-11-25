@@ -1,6 +1,7 @@
 package com.ios.nequixofficialv2.shared.repository
 
 import kotlinx.datetime.Instant
+import kotlinx.datetime.Clock
 
 /**
  * Implementación iOS de PaymentRepository usando Firebase
@@ -14,14 +15,15 @@ class IOSPaymentRepository : PaymentRepository {
     ): Result<Transaction> {
         return try {
             // Placeholder - aquí conectarías con Firebase Firestore iOS SDK
+            val timestamp = Clock.System.now().toEpochMilliseconds()
             val transaction = Transaction(
-                id = "tx-${System.currentTimeMillis()}",
+                id = "tx-$timestamp",
                 type = TransactionType.SEND,
                 amount = amount,
                 recipientName = "Usuario",
                 recipientPhone = recipientPhone,
-                date = Instant.fromEpochMilliseconds(System.currentTimeMillis()),
-                reference = "REF-${System.currentTimeMillis()}",
+                date = Instant.fromEpochMilliseconds(timestamp),
+                reference = "REF-$timestamp",
                 message = message
             )
             
@@ -54,4 +56,3 @@ class IOSPaymentRepository : PaymentRepository {
  * Factory para iOS
  */
 actual fun getPaymentRepository(): PaymentRepository = IOSPaymentRepository()
-

@@ -3,6 +3,7 @@ package com.ios.nequixofficialv2.shared.repository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.datetime.Clock
 
 /**
  * Implementación iOS de AuthRepository usando Firebase
@@ -23,8 +24,9 @@ class IOSAuthRepository : AuthRepository {
     override suspend fun verifyCode(verificationId: String, code: String): Result<User> {
         return try {
             // Placeholder - aquí verificarías con Firebase iOS SDK
+            val timestamp = Clock.System.now().toEpochMilliseconds()
             val user = User(
-                id = "ios-user-${System.currentTimeMillis()}",
+                id = "ios-user-$timestamp",
                 phoneNumber = "",
                 name = null
             )
@@ -51,4 +53,3 @@ class IOSAuthRepository : AuthRepository {
  * Factory para iOS
  */
 actual fun getAuthRepository(): AuthRepository = IOSAuthRepository()
-
