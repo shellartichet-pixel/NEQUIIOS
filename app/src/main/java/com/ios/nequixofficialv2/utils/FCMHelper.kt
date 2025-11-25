@@ -42,7 +42,7 @@ object FCMHelper {
                 return false
             }
             
-            val title = "Envío"
+            val title = "Nequi Colombia"
             val message = "$senderName te envió $${String.format("%.0f", amount)}, ¡lo mejor!"
             
             Log.d(TAG, "📤 Enviando notificación FCM a: ${receiverToken.take(20)}...")

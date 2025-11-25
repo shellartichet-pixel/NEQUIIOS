@@ -198,9 +198,17 @@ class ComprobanteActivity : AppCompatActivity() {
                         }
                         transaction.update(userRef, "saldo", currentBalance - required)
                     }.addOnSuccessListener {
+                    android.util.Log.d("ComprobanteActivity", "✅✅✅ SALDO DEL REMITENTE DESCONTADO EXITOSAMENTE")
+                    
                     // Registrar movimiento de salida antes de ir al comprobante
                     val phoneDigits = phone.filter { it.isDigit() }
                     val isQrPayment = intent.hasExtra("maskedName") && phoneDigits.length != 10
+                    
+                    // ✅✅✅ CRÍTICO: ACTUALIZAR SALDO DEL RECEPTOR INMEDIATAMENTE (solo si es transferencia normal, no QR)
+                    if (!isQrPayment && phoneDigits.length == 10) {
+                        android.util.Log.d("ComprobanteActivity", "💰💰💰 ACTUALIZANDO SALDO DEL RECEPTOR INMEDIATAMENTE (transferencia normal)")
+                        updateRecipientBalance(phoneDigits, required.toDouble())
+                    }
                     
                     // Para pagos QR, usar el nombre ofuscado directamente
                     if (isQrPayment) {
@@ -295,6 +303,9 @@ class ComprobanteActivity : AppCompatActivity() {
                         
                         // SEPARADO: Crear INCOMING para el receptor UNA SOLA VEZ (fuera del callback para evitar duplicados)
                         android.util.Log.d("ComprobanteActivity", "🎯 Iniciando guardado INCOMING para: $phoneDigits")
+                        
+                        // Nota: El saldo ya se actualizó arriba (línea ~205), solo guardamos el movimiento aquí
+                        android.util.Log.d("ComprobanteActivity", "📝 Guardando movimiento INCOMING (el saldo ya fue actualizado)")
                         
                         // Guardar INCOMING inmediatamente después de marcar como procesado
                         saveIncomingMovementForRecipient(phoneDigits, normalizedName, required.toDouble(), userPhone, transferId)
@@ -483,25 +494,45 @@ class ComprobanteActivity : AppCompatActivity() {
         senderPhone: String,
         transferId: String
     ) {
-        android.util.Log.d("ComprobanteActivity", "🎯 GUARDANDO 1 INCOMING PARA: $recipientPhoneDigits")
+        android.util.Log.d("ComprobanteActivity", "🎯 GUARDANDO MOVIMIENTO INCOMING PARA: $recipientPhoneDigits")
         android.util.Log.d("ComprobanteActivity", "Remitente: $senderPhone, Monto: +$amount, TransferID: $transferId")
+        
+        // Nota: El saldo ya se actualizó en processPayment() antes de llegar aquí
+        // Solo guardamos el movimiento INCOMING para el historial
         
         val senderPhoneDigits = senderPhone.filter { it.isDigit() }
         
         // 🔥 CORRECCIÓN: Buscar nombre real del REMITENTE antes de guardar
+        android.util.Log.d("ComprobanteActivity", "🔍 Buscando nombre real del remitente: $senderPhoneDigits")
         resolveSenderNameForIncoming(senderPhoneDigits) { senderName ->
-            android.util.Log.d("ComprobanteActivity", "📇 Nombre del remitente resuelto: $senderName")
+            android.util.Log.d("ComprobanteActivity", "📇 Nombre del remitente resuelto: '$senderName' (longitud: ${senderName.length})")
             
             // ✅ LIMPIAR TILDES AUTOMÁTICAMENTE del nombre del remitente
             val cleanedSenderName = com.ios.nequixofficialv2.utils.StringUtils.cleanName(senderName)
+            android.util.Log.d("ComprobanteActivity", "🧹 Nombre limpiado: '$cleanedSenderName'")
+            
+            // ✅ Asegurar que si el nombre está vacío o es solo números, formatear el teléfono
+            val finalName = if (cleanedSenderName.isBlank() || 
+                cleanedSenderName.all { it.isDigit() || it == '+' || it == ' ' || it == '-' } ||
+                cleanedSenderName.equals("NEQUI SAN", ignoreCase = true) ||
+                cleanedSenderName.equals("NEQUIXOFFICIAL", ignoreCase = true) ||
+                cleanedSenderName.equals("USUARIO NEQUI", ignoreCase = true)) {
+                // Si es solo números, está vacío, o es un nombre inválido, formatear el teléfono
+                val formattedPhone = "+57 ${senderPhoneDigits.substring(0,3)} ${senderPhoneDigits.substring(3,6)} ${senderPhoneDigits.substring(6)}"
+                android.util.Log.d("ComprobanteActivity", "📞 Usando teléfono formateado como nombre: $formattedPhone")
+                formattedPhone
+            } else {
+                android.util.Log.d("ComprobanteActivity", "✅ Usando nombre real: $cleanedSenderName")
+                cleanedSenderName
+            }
                             
-                            // 🔧 Generar referencia para movimiento INCOMING (misma que OUTGOING)
-                            val referencia = generateReference()
+            // 🔧 Generar referencia para movimiento INCOMING (misma que OUTGOING)
+            val referencia = generateReference()
             
             // Crear movimiento INCOMING con nombre real del remitente SIN TILDES
             val incomingMovement = Movement(
                 id = "", // ← VACÍO para que Firebase genere ID automático único
-                name = cleanedSenderName, // ✅ Nombre sin tildes
+                name = finalName, // ✅ Nombre real o teléfono formateado (nunca "NEQUI SAN")
                 amount = amount,
                 date = Date(),
                 phone = senderPhoneDigits,
@@ -513,17 +544,51 @@ class ComprobanteActivity : AppCompatActivity() {
             
             android.util.Log.d("ComprobanteActivity", "📥 Creando INCOMING: name=$senderName, amount=$amount, phone=$senderPhoneDigits")
             
+            // Nota: El saldo ya se actualizó ANTES de entrar a este callback (línea ~490)
+            // Solo guardamos el movimiento aquí, el saldo ya está actualizado
+            
             // Guardar con nombre real
             e.saveMovementForUser(recipientPhoneDigits, incomingMovement) { success, error ->
                 if (success) {
                     android.util.Log.d("ComprobanteActivity", "✅ INCOMING guardado exitosamente con nombre: $senderName")
                     
-                    // Solo después de guardar, actualizar saldo UNA VEZ
-                    updateRecipientBalance(recipientPhoneDigits, amount)
+                    // 🔔 CREAR NOTIFICACIÓN PERSISTENTE EN FIREBASE para que el receptor la detecte
+                    // Esto funciona incluso si el servicio no está corriendo
+                    lifecycleScope.launch {
+                        try {
+                            val recipientDocumentId = getUserDocumentIdByPhone(recipientPhoneDigits)
+                            if (recipientDocumentId != null) {
+                                val notificationData = mapOf(
+                                    "type" to "money_received",
+                                    "sender_name" to finalName,
+                                    "amount" to amount,
+                                    "message" to "$finalName te envió $$amount, ¡lo mejor!",
+                                    "timestamp" to com.google.firebase.Timestamp.now(),
+                                    "read" to false,
+                                    "movement_id" to incomingMovement.id.ifEmpty { "pending_${System.currentTimeMillis()}" }
+                                )
+                                
+                                db.collection("users")
+                                    .document(recipientDocumentId)
+                                    .collection("notifications")
+                                    .add(notificationData)
+                                    .addOnSuccessListener {
+                                        android.util.Log.d("ComprobanteActivity", "✅ Notificación persistente creada en Firebase")
+                                    }
+                                    .addOnFailureListener { error ->
+                                        android.util.Log.e("ComprobanteActivity", "❌ Error creando notificación persistente: ${error.message}")
+                                    }
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("ComprobanteActivity", "❌ Error en notificación persistente: ${e.message}")
+                        }
+                    }
                     
-                    // 🔔 La notificación se mostrará automáticamente en el dispositivo del RECEPTOR
-                    // gracias a MovementListenerService (app cerrada) o HomeActivity listener (app abierta)
-                    android.util.Log.d("ComprobanteActivity", "📲 Movimiento guardado - notificación será detectada por el receptor")
+                    // 🔔 TAMBIÉN intentar enviar notificación push real
+                    sendRealPushNotification(recipientPhoneDigits, finalName, amount)
+                    
+                    android.util.Log.d("ComprobanteActivity", "✅ Notificación push enviada al receptor: $recipientPhoneDigits")
+                    android.util.Log.d("ComprobanteActivity", "📲 Movimiento guardado y notificaciones enviadas")
                     
                 } else {
                     android.util.Log.e("ComprobanteActivity", "❌ Error guardando INCOMING: $error")
@@ -570,15 +635,25 @@ class ComprobanteActivity : AppCompatActivity() {
                 
                 if (!userQuery.isEmpty) {
                     val realName = userQuery.documents.first().getString("name")?.trim().orEmpty()
+                    android.util.Log.d("ComprobanteActivity", "🔍 Nombre encontrado en Firebase: '$realName' para $senderPhoneDigits")
                     if (realName.isNotBlank() && 
                         !realName.equals("NEQUIXOFFICIAL", ignoreCase = true) &&
-                        !realName.equals("USUARIO NEQUI", ignoreCase = true)) {
+                        !realName.equals("USUARIO NEQUI", ignoreCase = true) &&
+                        !realName.equals("NEQUI SAN", ignoreCase = true)) {
+                        android.util.Log.d("ComprobanteActivity", "✅ Usando nombre real: $realName")
                         cb(realName)
                         return@launch
+                    } else {
+                        android.util.Log.w("ComprobanteActivity", "⚠️ Nombre inválido o vacío: '$realName', usando teléfono formateado")
                     }
+                } else {
+                    android.util.Log.w("ComprobanteActivity", "⚠️ Usuario no encontrado en Firebase para: $senderPhoneDigits")
                 }
                 
-                cb(senderPhoneDigits)
+                // Si no se encontró nombre válido, formatear teléfono en lugar de devolver solo números
+                val formattedPhone = "+57 ${senderPhoneDigits.substring(0,3)} ${senderPhoneDigits.substring(3,6)} ${senderPhoneDigits.substring(6)}"
+                android.util.Log.d("ComprobanteActivity", "📞 Usando teléfono formateado: $formattedPhone")
+                cb(formattedPhone)
             } catch (e: Exception) {
                 android.util.Log.e("ComprobanteActivity", "Error resolviendo nombre del remitente: ${e.message}")
                 cb(senderPhoneDigits)
@@ -637,21 +712,45 @@ class ComprobanteActivity : AppCompatActivity() {
     
     /**
      * Actualiza el saldo del receptor cuando recibe dinero
+     * ✅ CRÍTICO: Esta función DEBE ejecutarse para que el dinero llegue al receptor
      */
     private fun updateRecipientBalance(recipientPhoneDigits: String, amount: Double) {
-        android.util.Log.d("ComprobanteActivity", "💰 Actualizando saldo del receptor: $recipientPhoneDigits (+$amount)")
+        // Normalizar teléfono: solo dígitos, máximo 10
+        val normalizedPhone = recipientPhoneDigits.filter { it.isDigit() }.let { 
+            if (it.length > 10) it.takeLast(10) else it 
+        }
+        
+        android.util.Log.d("ComprobanteActivity", "💰💰💰 INICIANDO ACTUALIZACIÓN DE SALDO")
+        android.util.Log.d("ComprobanteActivity", "   Receptor (original): $recipientPhoneDigits")
+        android.util.Log.d("ComprobanteActivity", "   Receptor (normalizado): $normalizedPhone")
+        android.util.Log.d("ComprobanteActivity", "   Monto: $amount")
+        
+        if (normalizedPhone.length != 10) {
+            android.util.Log.e("ComprobanteActivity", "❌❌❌ Teléfono receptor inválido: '$normalizedPhone' (debe tener 10 dígitos)")
+            return
+        }
+        
+        // Convertir amount a Long para consistencia con el resto del código
+        val amountLong = amount.toLong()
+        
+        if (amountLong <= 0) {
+            android.util.Log.e("ComprobanteActivity", "❌❌❌ Monto inválido: $amountLong (debe ser mayor a 0)")
+            return
+        }
         
         // Buscar el email document ID usando el número de teléfono
         lifecycleScope.launch {
             try {
+                android.util.Log.d("ComprobanteActivity", "🔍 Buscando usuario receptor en Firebase...")
                 val query = db.collection("users")
-                    .whereEqualTo("telefono", recipientPhoneDigits)
+                    .whereEqualTo("telefono", normalizedPhone)
                     .limit(1)
                     .get()
                     .await()
                 
                 if (query.isEmpty) {
-                    android.util.Log.e("ComprobanteActivity", "❌ Usuario no encontrado con telefono: $recipientPhoneDigits")
+                    android.util.Log.e("ComprobanteActivity", "❌❌❌ USUARIO RECEPTOR NO ENCONTRADO con telefono: $normalizedPhone")
+                    android.util.Log.e("ComprobanteActivity", "❌ Verifica que el usuario existe en Firebase con el campo 'telefono' = '$normalizedPhone'")
                     return@launch
                 }
                 
@@ -659,23 +758,61 @@ class ComprobanteActivity : AppCompatActivity() {
                 val userDocumentId = userDoc.id // Este es el correo (ej: usertest@gmail.com)
                 val userRef = db.collection("users").document(userDocumentId)
                 
+                android.util.Log.d("ComprobanteActivity", "✅ Usuario receptor encontrado: $normalizedPhone (doc: $userDocumentId)")
+                
+                // Leer saldo actual ANTES de la transacción para logging
+                val currentBalanceDoc = userDoc.get("saldo")
+                val currentBalanceBefore = when (currentBalanceDoc) {
+                    is Number -> currentBalanceDoc.toLong()
+                    is String -> currentBalanceDoc.filter { it.isDigit() }.toLongOrNull() ?: 0L
+                    else -> 0L
+                }
+                android.util.Log.d("ComprobanteActivity", "💰 Saldo actual del receptor (antes de actualizar): $currentBalanceBefore")
+                
                 // Usar transacción para actualizar saldo de forma segura
                 db.runTransaction { transaction ->
                     val snapshot = transaction.get(userRef)
-                    val currentBalance = snapshot.getDouble("saldo") ?: 0.0
-                    val newBalance = currentBalance + amount
+                    // ✅ CORRECCIÓN: Usar readBalanceFlexible para leer como Long (consistente con el resto del código)
+                    val currentBalance = readBalanceFlexible(snapshot, "saldo") ?: 0L
+                    val newBalance = currentBalance + amountLong
                     
-                    android.util.Log.d("ComprobanteActivity", "💰 Saldo anterior: $currentBalance, nuevo saldo: $newBalance")
+                    android.util.Log.d("ComprobanteActivity", "💰💰💰 DENTRO DE TRANSACCIÓN:")
+                    android.util.Log.d("ComprobanteActivity", "   Saldo anterior: $currentBalance")
+                    android.util.Log.d("ComprobanteActivity", "   Monto a sumar: $amountLong")
+                    android.util.Log.d("ComprobanteActivity", "   Nuevo saldo calculado: $newBalance")
                     
                     transaction.update(userRef, "saldo", newBalance)
                     newBalance
                 }.addOnSuccessListener { newBalance ->
-                    android.util.Log.d("ComprobanteActivity", "✅ Saldo actualizado exitosamente: $recipientPhoneDigits (doc: $userDocumentId) ahora tiene $$newBalance")
+                    android.util.Log.d("ComprobanteActivity", "✅✅✅✅✅ SALDO ACTUALIZADO EXITOSAMENTE ✅✅✅✅✅")
+                    android.util.Log.d("ComprobanteActivity", "   Receptor: $normalizedPhone (doc: $userDocumentId)")
+                    android.util.Log.d("ComprobanteActivity", "   Saldo anterior: $currentBalanceBefore")
+                    android.util.Log.d("ComprobanteActivity", "   Monto recibido: $amountLong")
+                    android.util.Log.d("ComprobanteActivity", "   Nuevo saldo: $newBalance")
+                    
+                    // Verificar que realmente se actualizó leyendo de nuevo
+                    userRef.get().addOnSuccessListener { verifyDoc ->
+                        val verifiedBalance = readBalanceFlexible(verifyDoc, "saldo") ?: 0L
+                        if (verifiedBalance == newBalance) {
+                            android.util.Log.d("ComprobanteActivity", "✅✅✅ VERIFICACIÓN: Saldo confirmado en Firebase: $verifiedBalance")
+                        } else {
+                            android.util.Log.e("ComprobanteActivity", "⚠️⚠️⚠️ ADVERTENCIA: Saldo no coincide. Esperado: $newBalance, Leído: $verifiedBalance")
+                        }
+                    }
                 }.addOnFailureListener { error ->
-                    android.util.Log.e("ComprobanteActivity", "❌ Error actualizando saldo: ${error.message}")
+                    android.util.Log.e("ComprobanteActivity", "❌❌❌❌❌ ERROR CRÍTICO ACTUALIZANDO SALDO ❌❌❌❌❌")
+                    android.util.Log.e("ComprobanteActivity", "   Receptor: $normalizedPhone (doc: $userDocumentId)")
+                    android.util.Log.e("ComprobanteActivity", "   Error: ${error.message}")
+                    if (error is com.google.firebase.firestore.FirebaseFirestoreException) {
+                        android.util.Log.e("ComprobanteActivity", "   Código Firestore: ${error.code}")
+                    }
+                    android.util.Log.e("ComprobanteActivity", "   Stack trace: ${error.stackTraceToString()}")
                 }
             } catch (e: Exception) {
-                android.util.Log.e("ComprobanteActivity", "❌ Error buscando usuario: ${e.message}")
+                android.util.Log.e("ComprobanteActivity", "❌❌❌ EXCEPCIÓN buscando usuario receptor")
+                android.util.Log.e("ComprobanteActivity", "   Teléfono: $normalizedPhone")
+                android.util.Log.e("ComprobanteActivity", "   Error: ${e.message}")
+                android.util.Log.e("ComprobanteActivity", "   Stack trace: ${e.stackTraceToString()}")
             }
         }
     }
@@ -746,7 +883,7 @@ class ComprobanteActivity : AppCompatActivity() {
                             try {
                                 appNotificationManager.sendDirectFCMNotification(
                                     token = fcmToken,
-                                    title = "Envío",
+                                    title = "Nequi Colombia",
                                     message = "$senderName te envió $$amount, ¡lo mejor!",
                                     data = mapOf(
                                         "type" to "money_received",

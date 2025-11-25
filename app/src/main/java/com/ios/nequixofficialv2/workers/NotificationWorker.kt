@@ -115,6 +115,31 @@ class NotificationWorker(
         }
     }
     
+    /**
+     * Convierte un drawable a Bitmap para usar en setLargeIcon
+     */
+    private fun drawableToBitmap(drawableId: Int): android.graphics.Bitmap? {
+        return try {
+            val drawable = applicationContext.getDrawable(drawableId)
+            if (drawable != null) {
+                val bitmap = android.graphics.Bitmap.createBitmap(
+                    drawable.intrinsicWidth.coerceAtLeast(1),
+                    drawable.intrinsicHeight.coerceAtLeast(1),
+                    android.graphics.Bitmap.Config.ARGB_8888
+                )
+                val canvas = android.graphics.Canvas(bitmap)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                bitmap
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("NotificationWorker", "Error convirtiendo drawable a bitmap: ${e.message}")
+            null
+        }
+    }
+    
     private fun showNotification(senderName: String, amount: String, movementId: String) {
         createNotificationChannel()
         
@@ -132,14 +157,14 @@ class NotificationWorker(
         
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_n)
-            .setLargeIcon(android.graphics.BitmapFactory.decodeResource(applicationContext.resources, R.drawable.ic_nequixofficial))
-            .setContentTitle("Envío")
+            .setLargeIcon(android.graphics.BitmapFactory.decodeResource(applicationContext.resources, R.drawable.ic_nequixofficial)) // Logo completo a la derecha
+            .setContentTitle("Nequi Colombia")
             .setContentText("$senderName te envió $$amount, ¡lo mejor!")
-            .setSubText("Nequi Kill • ahora")
+            .setSubText("ahora") // Sin duplicar "Nequi Kill"
             .setStyle(NotificationCompat.BigTextStyle()
                 .bigText("$senderName te envió $$amount, ¡lo mejor!")
-                .setBigContentTitle("Envío")
-                .setSummaryText("Nequi Kill • ahora"))
+                .setBigContentTitle("Nequi Colombia")
+                .setSummaryText("ahora")) // Sin duplicar "Nequi Kill"
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)

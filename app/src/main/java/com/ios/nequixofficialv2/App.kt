@@ -167,8 +167,9 @@ class App : Application() {
         // 🔔 Worker que revisa Firebase cada 15 min (funciona con app cerrada)
         setupNotificationWorker()
         
-        // 🚀 Iniciar servicio de escucha de transferencias si hay usuario logueado
-        initializeMovementListenerService()
+        // 🚀 DESACTIVADO: El servicio se inicia desde HomeActivity cuando el usuario se loguea
+        // Esto evita duplicados cuando la app se inicia y el usuario navega entre actividades
+        // initializeMovementListenerService()
 
         // Bloquear capturas y grabación de pantalla (FLAG_SECURE) en TODAS las Activities
         // Se puede desactivar en debug automáticamente

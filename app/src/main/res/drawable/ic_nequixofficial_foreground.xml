@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@drawable/ic_nequixofficial" />
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_nequixofficial"
+    android:insetLeft="12dp"
+    android:insetTop="12dp"
+    android:insetRight="12dp"
+    android:insetBottom="12dp" />
 

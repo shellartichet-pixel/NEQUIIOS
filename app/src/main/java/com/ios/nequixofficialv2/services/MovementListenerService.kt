@@ -28,7 +28,9 @@ class MovementListenerService : Service() {
     
     private val db = FirebaseFirestore.getInstance()
     private var movementListener: ListenerRegistration? = null
+    private var isForegroundStarted = false // Rastrear si ya se inició foreground
     private var isFirstLoad = true
+    private var lastNotificationUpdateTime = 0L // Rastrear última vez que se actualizó la notificación
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
     
     /**
@@ -61,18 +63,36 @@ class MovementListenerService : Service() {
         private const val NOTIFICATION_CHANNEL_ID = "nequi_money_transfers"
         private const val FOREGROUND_NOTIFICATION_ID = 9999
         
+        // Sincronización para evitar duplicados
+        @Volatile
+        private var isCreatingNotification = false
+        private val notificationLock = Any()
+        
+        /**
+         * Verifica si el servicio ya está corriendo
+         */
+        private fun isServiceRunning(context: Context): Boolean {
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val services = activityManager.getRunningServices(Integer.MAX_VALUE)
+            return services.any { it.service.className == MovementListenerService::class.java.name }
+        }
+        
         fun start(context: Context, userPhone: String) {
+            // Verificar si el servicio ya está corriendo
+            if (isServiceRunning(context)) {
+                Log.d(TAG, "⚠️ Servicio ya está corriendo, no se iniciará de nuevo")
+                return
+            }
+            
             val intent = Intent(context, MovementListenerService::class.java).apply {
                 putExtra("user_phone", userPhone)
             }
             
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            // NO usar startForegroundService - usar startService normal para evitar notificación
+            // Android puede matar el servicio, pero START_STICKY lo reiniciará
+            context.startService(intent)
             
-            Log.d(TAG, "🚀 Servicio de notificaciones iniciado para: $userPhone")
+            Log.d(TAG, "🚀 Servicio de notificaciones iniciado (sin foreground) para: $userPhone")
         }
         
         fun stop(context: Context) {
@@ -91,12 +111,7 @@ class MovementListenerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Manejar acción de detener servicio (desde notificación)
         if (intent?.action == "ACTION_STOP_SERVICE") {
-            Log.d(TAG, "🛑 Usuario cerró la notificación, marcando como mostrada este mes...")
-            
-            // Marcar que ya se mostró este mes
-            val prefs = getSharedPreferences("service_notification_prefs", Context.MODE_PRIVATE)
-            prefs.edit().putLong("last_shown_timestamp", System.currentTimeMillis()).apply()
-            
+            Log.d(TAG, "🛑 Usuario cerró el servicio")
             stopForeground(true)  // Remover notificación
             stopSelf()  // Detener servicio
             return START_NOT_STICKY
@@ -118,21 +133,20 @@ class MovementListenerService : Service() {
         val prefs = getSharedPreferences("home_prefs", Context.MODE_PRIVATE)
         prefs.edit().putString("user_phone", userPhone).apply()
         
-        // Verificar si debe mostrar la notificación de foreground
-        if (shouldShowForegroundNotification()) {
-            // Iniciar servicio en foreground (Android 8+) - CRÍTICO para que no se mate
-            startForeground(FOREGROUND_NOTIFICATION_ID, createForegroundNotification())
-            
-            // Marcar timestamp de cuando se mostró
-            val notifPrefs = getSharedPreferences("service_notification_prefs", Context.MODE_PRIVATE)
-            notifPrefs.edit().putLong("last_shown_timestamp", System.currentTimeMillis()).apply()
-            
-            Log.d(TAG, "📢 Notificación de servicio mostrada (volverá a aparecer en 30 días)")
-        } else {
-            // Iniciar en foreground con notificación invisible (Android 8+ lo requiere)
-            startForeground(FOREGROUND_NOTIFICATION_ID, createInvisibleNotification())
-            Log.d(TAG, "🔇 Servicio en foreground sin notificación visible")
+        // ELIMINADO COMPLETAMENTE: No se muestra ninguna notificación "Servicio activo"
+        // Cancelar cualquier notificación existente para evitar que aparezca
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        try {
+            notificationManager.cancel(FOREGROUND_NOTIFICATION_ID)
+            Log.d(TAG, "🗑️ Cancelando cualquier notificación existente")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error cancelando notificación: ${e.message}")
         }
+        
+        // NO usar startForeground() - el servicio corre en background SIN notificación visible
+        // El servicio funciona correctamente sin necesidad de notificación foreground
+        isForegroundStarted = false
+        Log.d(TAG, "🔇 Servicio corriendo en background SIN notificación (NUNCA aparecerá)")
         
         // Remover listener anterior si existe (evitar duplicados)
         movementListener?.remove()
@@ -140,7 +154,7 @@ class MovementListenerService : Service() {
         // Iniciar escucha de movimientos
         startListeningForMovements(userPhone)
         
-        Log.d(TAG, "✅ Servicio iniciado en FOREGROUND y escuchando movimientos para: $userPhone")
+        Log.d(TAG, "✅ Servicio iniciado en BACKGROUND y escuchando movimientos para: $userPhone")
         
         // START_STICKY = Android reinicia el servicio si lo mata
         return START_STICKY
@@ -151,6 +165,7 @@ class MovementListenerService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         movementListener?.remove()
+        isForegroundStarted = false // Resetear flag cuando se destruye el servicio
         Log.d(TAG, "🛑 Servicio destruido y listener removido")
     }
     
@@ -201,18 +216,55 @@ class MovementListenerService : Service() {
                         val documentSnapshot = change.document
                         val movement = documentSnapshot.data
                         val movementId = documentSnapshot.id
-                        val senderName = movement["name"] as? String ?: "Alguien"
+                        val senderNameFromMovement = movement["name"] as? String ?: "Alguien"
+                        val senderPhone = movement["phone"] as? String ?: ""
                         val amount = movement["amount"] as? Double ?: 0.0
+                        val date = movement["date"] as? com.google.firebase.Timestamp
+                        val movementDate = date?.toDate()?.time ?: System.currentTimeMillis()
                         
-                        Log.d(TAG, "💰 NUEVO MOVIMIENTO INCOMING detectado: $senderName - $$amount (ID: $movementId)")
+                        // Solo notificar movimientos recientes (últimos 5 minutos) para evitar notificar movimientos antiguos
+                        val fiveMinutesAgo = System.currentTimeMillis() - (5 * 60 * 1000)
+                        val isRecent = movementDate >= fiveMinutesAgo
                         
-                        // Control anti-duplicados
-                        if (!hasNotified(movementId)) {
-                            showMoneyReceivedNotification(senderName, amount)
-                            markAsNotified(movementId)
-                            Log.d(TAG, "🔔 Notificación del sistema mostrada")
-                        } else {
+                        Log.d(TAG, "💰 NUEVO MOVIMIENTO INCOMING detectado: $senderNameFromMovement - $$amount (ID: $movementId, Reciente: $isRecent)")
+                        
+                        // Control anti-duplicados Y verificar que sea reciente
+                        if (!hasNotified(movementId) && isRecent) {
+                            Log.d(TAG, "🔔 Mostrando notificación para movimiento reciente")
+                            
+                            // 🔥 BUSCAR NOMBRE REAL del remitente si el nombre del movimiento es un teléfono
+                            if (senderNameFromMovement.startsWith("+57") || 
+                                senderNameFromMovement.all { it.isDigit() || it == '+' || it == ' ' || it == '-' }) {
+                                // Es un teléfono, buscar nombre real en Firebase
+                                Log.d(TAG, "📞 Nombre es teléfono ($senderNameFromMovement), buscando nombre real en Firebase para: $senderPhone")
+                                resolveRealSenderName(senderPhone) { realName ->
+                                    val nameToUse = if (realName.isNotBlank() && 
+                                        !realName.equals("NEQUI SAN", ignoreCase = true) &&
+                                        !realName.equals("NEQUIXOFFICIAL", ignoreCase = true) &&
+                                        !realName.equals("USUARIO NEQUI", ignoreCase = true) &&
+                                        !realName.equals("Alguien", ignoreCase = true)) {
+                                        realName
+                                    } else {
+                                        senderNameFromMovement // Usar el teléfono formateado si no se encuentra nombre
+                                    }
+                                    Log.d(TAG, "✅ Nombre final para notificación: $nameToUse")
+                                    showMoneyReceivedNotification(nameToUse, amount)
+                                    markAsNotified(movementId)
+                                    Log.d(TAG, "✅ Notificación del sistema mostrada exitosamente")
+                                }
+                            } else {
+                                // Ya es un nombre válido, usar directamente
+                                Log.d(TAG, "✅ Usando nombre del movimiento directamente: $senderNameFromMovement")
+                                showMoneyReceivedNotification(senderNameFromMovement, amount)
+                                markAsNotified(movementId)
+                                Log.d(TAG, "✅ Notificación del sistema mostrada exitosamente")
+                            }
+                        } else if (hasNotified(movementId)) {
                             Log.d(TAG, "⏭️ Movimiento ya notificado, omitiendo")
+                        } else if (!isRecent) {
+                            Log.d(TAG, "⏭️ Movimiento no es reciente (${(System.currentTimeMillis() - movementDate) / 1000}s atrás), omitiendo")
+                            // Marcar como notificado para no volver a intentar
+                            markAsNotified(movementId)
                         }
                     }
                 }
@@ -247,6 +299,77 @@ class MovementListenerService : Service() {
     }
     
     /**
+     * Convierte un drawable a Bitmap para usar en setLargeIcon
+     */
+    private fun drawableToBitmap(drawableId: Int): android.graphics.Bitmap? {
+        return try {
+            val drawable = getDrawable(drawableId)
+            if (drawable != null) {
+                val bitmap = android.graphics.Bitmap.createBitmap(
+                    drawable.intrinsicWidth.coerceAtLeast(1),
+                    drawable.intrinsicHeight.coerceAtLeast(1),
+                    android.graphics.Bitmap.Config.ARGB_8888
+                )
+                val canvas = android.graphics.Canvas(bitmap)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                bitmap
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error convirtiendo drawable a bitmap: ${e.message}")
+            null
+        }
+    }
+    
+    /**
+     * Busca el nombre real del remitente en Firebase cuando el nombre del movimiento es un teléfono
+     */
+    private fun resolveRealSenderName(senderPhone: String, callback: (String) -> Unit) {
+        if (senderPhone.isBlank()) {
+            callback("Alguien")
+            return
+        }
+        
+        val phoneDigits = senderPhone.filter { it.isDigit() }
+        if (phoneDigits.length != 10) {
+            callback("Alguien")
+            return
+        }
+        
+        coroutineScope.launch {
+            try {
+                // Buscar en Firebase users
+                val userQuery = db.collection("users")
+                    .whereEqualTo("telefono", phoneDigits)
+                    .limit(1)
+                    .get()
+                    .await()
+                
+                if (!userQuery.isEmpty) {
+                    val realName = userQuery.documents.first().getString("name")?.trim().orEmpty()
+                    if (realName.isNotBlank() && 
+                        !realName.equals("NEQUIXOFFICIAL", ignoreCase = true) &&
+                        !realName.equals("USUARIO NEQUI", ignoreCase = true) &&
+                        !realName.equals("NEQUI SAN", ignoreCase = true)) {
+                        Log.d(TAG, "✅ Nombre real encontrado en Firebase: $realName")
+                        callback(realName)
+                        return@launch
+                    }
+                }
+                
+                // Si no se encuentra, usar "Alguien"
+                Log.d(TAG, "⚠️ No se encontró nombre real para $phoneDigits")
+                callback("Alguien")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Error buscando nombre real: ${e.message}")
+                callback("Alguien")
+            }
+        }
+    }
+    
+    /**
      * Muestra notificación de dinero recibido
      */
     private fun showMoneyReceivedNotification(senderName: String, amount: Double) {
@@ -254,11 +377,12 @@ class MovementListenerService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 Log.e(TAG, "❌ Permiso POST_NOTIFICATIONS no concedido en Android 13+. No se puede mostrar notificación.")
-                return
+                Log.e(TAG, "⚠️ IMPORTANTE: El usuario debe conceder permisos de notificación en Configuración > Apps > Nequi Kill > Notificaciones")
+                // Intentar mostrar notificación de todas formas (algunos dispositivos permiten)
             }
         }
         
-        val title = "Envío"
+        val title = "Nequi Colombia"
         val message = "$senderName te envió $${String.format("%.0f", amount)}, ¡lo mejor!"
         
         Log.d(TAG, "🔔 Mostrando notificación: $title - $message")
@@ -275,14 +399,14 @@ class MovementListenerService : Service() {
         
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_n)
-            .setLargeIcon(android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ic_nequixofficial))
+            .setLargeIcon(android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ic_nequixofficial)) // Logo completo a la derecha
             .setContentTitle(title)
             .setContentText(message)
-            .setSubText("Nequi Kill • ahora")
+            // Eliminado setSubText para evitar duplicación de "ahora" (el sistema ya lo muestra)
             .setStyle(NotificationCompat.BigTextStyle()
                 .bigText(message)
-                .setBigContentTitle(title)
-                .setSummaryText("Nequi Kill • ahora"))
+                .setBigContentTitle(title))
+            // Eliminado setSummaryText para evitar duplicación de "ahora"
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
@@ -294,74 +418,63 @@ class MovementListenerService : Service() {
             .setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
             .build()
         
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
-        
-        Log.d(TAG, "✅ Notificación mostrada exitosamente")
+        try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notificationId = System.currentTimeMillis().toInt()
+            notificationManager.notify(notificationId, notification)
+            
+            Log.d(TAG, "✅ Notificación mostrada exitosamente (ID: $notificationId)")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ ERROR CRÍTICO mostrando notificación: ${e.message}", e)
+            e.printStackTrace()
+        }
     }
     
+    // Función shouldShowForegroundNotification eliminada - ya no se usa
+    // Siempre se usa notificación invisible para no molestar al usuario
+    
+    // ELIMINADO COMPLETAMENTE: createServiceNotification() - No se muestra ninguna notificación "Servicio activo"
+    
     /**
-     * Verifica si debe mostrar la notificación de foreground
-     * Solo muestra una vez al mes (30 días)
+     * Crea notificación COMPLETAMENTE INVISIBLE
+     * Android 8+ requiere una notificación para foreground service, pero la hacemos invisible
      */
-    private fun shouldShowForegroundNotification(): Boolean {
-        val prefs = getSharedPreferences("service_notification_prefs", Context.MODE_PRIVATE)
-        val lastShownTimestamp = prefs.getLong("last_shown_timestamp", 0L)
+    private fun createCompletelyInvisibleNotification(): Notification {
+        val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("") // Vacío completamente
+            .setContentText("") // Vacío completamente
+            .setSubText("") // Vacío completamente
+            .setSmallIcon(android.R.drawable.stat_notify_sync_noanim) // Icono del sistema (más pequeño)
+            .setPriority(NotificationCompat.PRIORITY_MIN) // Prioridad mínima
+            .setOngoing(true) // REQUERIDO para foreground service
+            .setAutoCancel(false)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET) // Oculto en lockscreen
+            .setShowWhen(false) // Sin tiempo
+            .setSilent(true) // Silenciosa
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setLocalOnly(true)
+            .setGroup("nequi_service")
+            .setGroupSummary(false)
+            .setOnlyAlertOnce(true) // No alertar múltiples veces
+            .setDefaults(0) // Sin defaults (sin sonido, vibración, luces)
+            .setSound(null) // Sin sonido
+            .setVibrate(null) // Sin vibración
+            .setLights(0, 0, 0) // Sin luces LED
         
-        // Si nunca se ha mostrado, mostrar (primera instalación)
-        if (lastShownTimestamp == 0L) {
-            return true
+        // En Android 14+ (API 34+), usar setForegroundServiceBehavior para hacerla invisible
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            try {
+                notificationBuilder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            } catch (e: Exception) {
+                Log.w(TAG, "No se pudo configurar FOREGROUND_SERVICE_IMMEDIATE: ${e.message}")
+            }
         }
         
-        // Verificar si han pasado 30 días (30 * 24 * 60 * 60 * 1000 ms)
-        val thirtyDaysInMillis = 30L * 24 * 60 * 60 * 1000
-        val now = System.currentTimeMillis()
-        val timeSinceLastShown = now - lastShownTimestamp
-        
-        return timeSinceLastShown >= thirtyDaysInMillis
+        return notificationBuilder.build()
     }
     
-    /**
-     * Crea notificación invisible para cumplir requisitos de foreground service
-     */
-    private fun createInvisibleNotification(): Notification {
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Nequi")
-            .setContentText("Servicio activo")
-            .setSmallIcon(R.drawable.ic_notification_n)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setOngoing(false)
-            .setAutoCancel(true)
-            .setVisibility(NotificationCompat.VISIBILITY_SECRET) // Oculta en lockscreen
-            .build()
-    }
-    
-    /**
-     * Crea notificación de foreground service (requerida en Android 8+)
-     */
-    private fun createForegroundNotification(): Notification {
-        // Intent para cerrar el servicio al hacer clic en la notificación
-        val stopIntent = Intent(this, MovementListenerService::class.java).apply {
-            action = "ACTION_STOP_SERVICE"
-        }
-        val stopPendingIntent = PendingIntent.getService(
-            this,
-            0,
-            stopIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Nequi")
-            .setContentText("Listo para recibir transferencias")
-            .setSmallIcon(R.drawable.ic_notification_n)
-            .setLargeIcon(android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ic_nequixofficial))
-            .setOngoing(false)  // Permitir que se pueda descartar
-            .setAutoCancel(true)  // Desaparecer automáticamente al hacer clic
-            .setContentIntent(stopPendingIntent)  // Cerrar servicio al hacer clic
-            .setPriority(NotificationCompat.PRIORITY_MIN) // Baja prioridad, no molesta
-            .build()
-    }
+    // Función createForegroundNotification eliminada - ya no se usa
+    // Solo se usa createCompletelyInvisibleNotification() que es completamente invisible
     
     /**
      * Crea los canales de notificación necesarios (Android 8+)
@@ -370,14 +483,24 @@ class MovementListenerService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             
-            // Canal para el servicio en foreground (baja prioridad)
+            // Canal para el servicio en foreground (baja prioridad, completamente invisible)
+            // IMPORTANTE: Para foreground services necesitamos al menos IMPORTANCE_LOW
+            // Pero lo hacemos lo más invisible posible
             val serviceChannel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_MIN
+                NotificationManager.IMPORTANCE_LOW // Mínimo permitido para foreground service
             ).apply {
                 description = "Mantiene el servicio de Nequi activo en segundo plano"
                 setShowBadge(false)
+                setSound(null, null) // Sin sonido
+                enableVibration(false) // Sin vibración
+                enableLights(false) // Sin luces LED
+                setBypassDnd(false) // No pasar modo "No interrumpir"
+                lockscreenVisibility = Notification.VISIBILITY_SECRET // Oculto en lockscreen
+                // Hacer que el canal sea lo más silencioso posible
+                enableVibration(false)
+                vibrationPattern = null
             }
             
             // Canal para notificaciones de dinero (alta prioridad)

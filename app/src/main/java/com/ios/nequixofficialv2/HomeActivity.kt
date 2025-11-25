@@ -79,9 +79,6 @@ class HomeActivity : AppCompatActivity() {
     private var currentSection: BottomSection = BottomSection.HOME
     private val pendingRunnables = mutableListOf<Runnable>()
     
-    // Control anti-duplicados de notificaciones (sincronizado con MovementListenerService)
-    private var incomingMovementsListener: com.google.firebase.firestore.ListenerRegistration? = null
-    
     /**
      * Obtiene el document ID del usuario (correo) buscando por el campo telefono
      * El documento ID es un correo (ej: usertest@gmail.com), pero la app busca por telefono
@@ -148,6 +145,9 @@ class HomeActivity : AppCompatActivity() {
         // Interacciones de UI (bottom bar, cash menu, ojo de saldo, etc.)
         setupInteractions()
         
+        // Aplicar diseño de Cuenta de Ahorros si el modo TikTok Live está activo
+        applyNequiAhorrosDesign()
+        
         // Actualizar badge de notificaciones
         updateNotificationBadge()
         
@@ -158,12 +158,6 @@ class HomeActivity : AppCompatActivity() {
         // Este servicio funciona independiente de HomeActivity (app cerrada o abierta)
         com.ios.nequixofficialv2.services.MovementListenerService.start(this, userPhone)
         
-        // 🚀 DESACTIVADO: Worker ya no necesario
-        // triggerNotificationWorkerOnStart()
-        
-        // ✅ DESACTIVADO: MovementListenerService maneja TODAS las notificaciones
-        // HomeActivity solo actualiza UI, no muestra notificaciones para evitar duplicados
-        // startListeningForIncomingMovements()
         
         // ELIMINAR COMPLETAMENTE el SwipeRefreshLayout - no lo usamos
         binding.homeSwipe.isEnabled = false
@@ -280,6 +274,10 @@ class HomeActivity : AppCompatActivity() {
             val total = (disponible + colchonLong).coerceAtLeast(0L)
             renderSaldo(disponible, total)
         }
+        
+        // Aplicar diseño de Cuenta de Ahorros después de cargar datos
+        applyNequiAhorrosDesign()
+        
         // Si la sección de Movimientos está visible, refrescar la lista (por ejemplo al volver de comprobantes/QR)
         if (binding.tvMovimientosTitle.isShown) {
             loadMovements()
@@ -547,11 +545,31 @@ class HomeActivity : AppCompatActivity() {
     private fun renderSaldo(disponible: Long, total: Long) {
         lastDisponibleValue = disponible
         lastTotalValue = total
+        
+        // ✅ PROTECCIÓN TIKTOK LIVE MODE: Si está activo, mostrar montos seguros
+        if (com.ios.nequixofficialv2.utils.TikTokLiveModeHelper.isLiveModeEnabled(this)) {
+            // En modo TikTok Live, mostrar como "puntos" en lugar de dinero
+            val safeDisp = com.ios.nequixofficialv2.utils.TikTokLiveModeHelper.getSafeAmount(disponible)
+            val safeTotal = com.ios.nequixofficialv2.utils.TikTokLiveModeHelper.getSafeAmount(total)
+            
+            // Separar "puntos" de los números
+            val partsDisp = safeDisp.split(" pts")
+            val partsTotal = safeTotal.split(" pts")
+            
+            binding.tvSaldoEntero.text = partsDisp.firstOrNull() ?: "0"
+            binding.tvSaldoDecimal.text = " pts" // Mostrar "pts" en lugar de decimales
+            binding.tvTotalSaldoEntero.text = partsTotal.firstOrNull() ?: "0"
+            binding.tvTotalSaldoDecimal.text = " pts"
+            
+            android.util.Log.d("HomeActivity", "🎬 Modo TikTok Live: Saldos mostrados como puntos")
+            return
+        }
+        
         val localeCO = Locale("es", "CO")
         val nf = NumberFormat.getCurrencyInstance(localeCO)
         val textoDisp = nf.format(disponible)
         val textoTotal = nf.format(total)
-        // Texto suele salir como $ 15.000,00. Separamos parte entera/decimal para los 2 bloques
+        // Texto suele salir como $ 15.000,00. Separamos parte entera/decimal para los 2 bloques
         fun splitMoney(t: String): Pair<String, String> {
             val partes = t.replace("\u00A0", " ").trim()
             val sinSimbolo = partes.replace("$", "").trim()
@@ -819,8 +837,8 @@ class HomeActivity : AppCompatActivity() {
         // 3) Sugeridos Nequi (orden y drawables originales del layout)
         // Bre-B
         binding.ivNegocio.setImageResource(R.drawable.bre_b)
-        // Tigo (usando el icono original correcto)
-        binding.ivTigo.setImageResource(R.drawable.tigo)
+        // Recarga de celular (corregido: no usar drawable de Tigo)
+        binding.ivTigo.setImageResource(R.drawable.recargacelular)
         // Claro
         binding.ivKey.setImageResource(R.drawable.claro)
         // WOM
@@ -1102,6 +1120,125 @@ class HomeActivity : AppCompatActivity() {
         // Cuando el saldo está OCULTO -> mostrar ojo SIN raya (design_password_eye)
         val icon = if (isBalanceHidden) R.drawable.design_password_eye else R.drawable.ic_visibility_off
         binding.ivVisibility.setImageResource(icon)
+    }
+    
+    // ImageView para el fondo del modo Ahorros desde assets
+    private var ahorrosBackgroundView: ImageView? = null
+    
+    /**
+     * Aplica el diseño de "Cuenta de Ahorros" cuando el modo Nequi Ahorros está activo
+     * Usa la imagen exclusiva desde assets: settings_aav_cas.cache
+     */
+    private fun applyNequiAhorrosDesign() {
+        val prefs = getSharedPreferences("home_prefs", MODE_PRIVATE)
+        val isNequiAhorrosModeEnabled = prefs.getBoolean("nequi_ahorros_mode_enabled", false)
+        
+        // Aplicar diseño de Cuenta de Ahorros si el switch está activo
+        if (isNequiAhorrosModeEnabled) {
+            android.util.Log.d("HomeActivity", "🏦 Aplicando diseño Nequi Ahorros con imagen desde assets...")
+            
+            // Cambiar texto "Depósito Bajo Monto" a "Cuenta de Ahorros"
+            binding.tvDepositoBajoMonto.text = "Cuenta de Ahorros"
+            
+            // OCULTAR todas las imágenes de fondo decorativas originales
+            binding.ivTopOrquidea.visibility = View.GONE
+            binding.ivTopSaldo.visibility = View.GONE
+            
+            // Cargar y mostrar la imagen exclusiva desde assets
+            try {
+                val scrollViewContent = binding.mainScrollView.getChildAt(0) as? androidx.constraintlayout.widget.ConstraintLayout
+                
+                // Crear ImageView para el fondo si no existe
+                if (ahorrosBackgroundView == null && scrollViewContent != null) {
+                    ahorrosBackgroundView = ImageView(this).apply {
+                        id = View.generateViewId()
+                        scaleType = ImageView.ScaleType.CENTER_CROP // Ajustar para cubrir toda el área
+                        adjustViewBounds = false // No ajustar bounds, usar toda la pantalla
+                    }
+                    
+                    // Cargar imagen desde assets
+                    try {
+                        val inputStream = assets.open("settings_aav_cas.cache")
+                        val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                        inputStream.close()
+                        
+                        ahorrosBackgroundView?.setImageBitmap(bitmap)
+                        android.util.Log.d("HomeActivity", "✅ Imagen settings_aav_cas.cache cargada desde assets")
+                    } catch (e: Exception) {
+                        android.util.Log.e("HomeActivity", "❌ Error cargando imagen desde assets: ${e.message}")
+                    }
+                    
+                    // Agregar constraints para que cubra toda la pantalla desde el top hasta el dividerLine
+                    val layoutParams = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+                        androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.MATCH_PARENT,
+                        0 // Altura será determinada por constraints
+                    )
+                    layoutParams.topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                    layoutParams.bottomToTop = binding.dividerLine.id
+                    layoutParams.startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                    layoutParams.endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+                    
+                    // Asegurar que la imagen cubra todo el ancho y alto disponible
+                    layoutParams.matchConstraintDefaultWidth = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.MATCH_CONSTRAINT_SPREAD
+                    layoutParams.matchConstraintDefaultHeight = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.MATCH_CONSTRAINT_SPREAD
+                    
+                    ahorrosBackgroundView?.layoutParams = layoutParams
+                    
+                    // Insertar al inicio para que quede detrás de todos los elementos
+                    scrollViewContent.addView(ahorrosBackgroundView, 0)
+                } else {
+                    ahorrosBackgroundView?.visibility = View.VISIBLE
+                    // Asegurar que el scaleType siga siendo CENTER_CROP para cubrir toda el área
+                    ahorrosBackgroundView?.scaleType = ImageView.ScaleType.CENTER_CROP
+                }
+                
+                // Asegurar que el contenedor principal tenga fondo blanco
+                scrollViewContent?.setBackgroundColor(ContextCompat.getColor(this, android.R.color.white))
+                binding.mainScrollView.setBackgroundColor(ContextCompat.getColor(this, android.R.color.white))
+                
+                // Asegurar que las secciones de abajo tengan fondo blanco
+                binding.dividerLine.setBackgroundColor(ContextCompat.getColor(this, android.R.color.white))
+                binding.suggestedSection.setBackgroundColor(ContextCompat.getColor(this, android.R.color.white))
+                binding.favoriteSection.setBackgroundColor(ContextCompat.getColor(this, android.R.color.white))
+                
+                // Cambiar el color de la barra de estado (extraer del color principal de la imagen si es necesario)
+                val purpleColor = ContextCompat.getColor(this, R.color.nequi_purple)
+                window.statusBarColor = purpleColor
+                
+                android.util.Log.d("HomeActivity", "✅ Imagen de fondo del modo Ahorros aplicada correctamente")
+            } catch (e: Exception) {
+                android.util.Log.e("HomeActivity", "❌ Error aplicando diseño Nequi Ahorros: ${e.message}")
+                android.util.Log.e("HomeActivity", "Stack trace: ${e.stackTraceToString()}")
+            }
+            
+            android.util.Log.d("HomeActivity", "🏦 Diseño Nequi Ahorros aplicado completamente")
+        } else {
+            // Restaurar diseño original
+            binding.tvDepositoBajoMonto.text = "Depósito Bajo Monto"
+            
+            // Ocultar imagen de fondo del modo Ahorros
+            ahorrosBackgroundView?.visibility = View.GONE
+            
+            // Restaurar imágenes de fondo decorativas originales
+            binding.ivTopOrquidea.visibility = View.VISIBLE
+            binding.ivTopOrquidea.alpha = 1.0f
+            binding.ivTopSaldo.visibility = View.VISIBLE
+            
+            // Restaurar fondos originales
+            try {
+                val scrollViewContent = binding.mainScrollView.getChildAt(0) as? androidx.constraintlayout.widget.ConstraintLayout
+                scrollViewContent?.setBackgroundColor(ContextCompat.getColor(this, android.R.color.white))
+                binding.mainScrollView.setBackgroundColor(ContextCompat.getColor(this, android.R.color.white))
+                
+                binding.dividerLine.setBackgroundResource(0)
+                binding.suggestedSection.setBackgroundResource(0)
+                binding.favoriteSection.setBackgroundResource(0)
+                
+                window.statusBarColor = ContextCompat.getColor(this, R.color.color_200020)
+            } catch (e: Exception) {
+                android.util.Log.e("HomeActivity", "Error restaurando diseño original: ${e.message}")
+            }
+        }
     }
 
     // Sin máscara de intro: el usuario decide con el ojo
@@ -2256,204 +2393,34 @@ class HomeActivity : AppCompatActivity() {
         }
     }
     
-    /**
-     * Escucha movimientos INCOMING en tiempo real para notificar al usuario
-     * ✅ OPTIMIZADO: Detecta primera carga y luego notifica todos los nuevos
-     */
-    private fun startListeningForIncomingMovements() {
-        val userPhoneDigits = userPhone.filter { it.isDigit() }
-        if (userPhoneDigits.length != 10) return
-        
-        android.util.Log.d("HomeActivity", "🔊 Iniciando listener para movimientos INCOMING del usuario: $userPhoneDigits")
-        
-        // Cancelar listener anterior si existe
-        incomingMovementsListener?.remove()
-        
-        // Obtener el email document ID usando el número de teléfono
-        lifecycleScope.launch {
-            val userDocumentId = getUserDocumentIdByPhone(userPhone)
-            if (userDocumentId == null) {
-                android.util.Log.e("HomeActivity", "❌ No se encontró usuario con telefono: $userPhone")
-                return@launch
-            }
-            
-            // Flag para controlar la primera carga
-            var isFirstLoad = true
-            
-            // Escuchar cambios en la colección de movimientos del usuario
-            incomingMovementsListener = db.collection("users")
-                .document(userDocumentId)
-                .collection("movements")
-            .whereEqualTo("type", "INCOMING")
-            .addSnapshotListener { snapshots, error ->
-                if (error != null) {
-                    android.util.Log.e("HomeActivity", "❌ Error escuchando movimientos: ${error.message}")
-                    return@addSnapshotListener
-                }
-                
-                if (snapshots == null) return@addSnapshotListener
-                
-                // En la PRIMERA carga, solo marcar movimientos existentes (no notificar)
-                if (isFirstLoad) {
-                    val prefs = getSharedPreferences("notified_movements_service", Context.MODE_PRIVATE)
-                    val editor = prefs.edit()
-                    snapshots.documents.forEach { doc ->
-                        editor.putBoolean(doc.id, true)
-                    }
-                    editor.apply()
-                    isFirstLoad = false
-                    android.util.Log.d("HomeActivity", "📋 Primera carga: ${snapshots.documents.size} movimientos existentes marcados")
-                    return@addSnapshotListener
-                }
-                
-                // DESPUÉS de la primera carga, notificar SOLO movimientos AÑADIDOS
-                snapshots.documentChanges.forEach { change ->
-                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
-                        val movement = change.document
-                        val movementId = movement.id
-                        val senderName = movement.getString("name") ?: "Alguien"
-                        val amount = movement.getDouble("amount") ?: 0.0
-                        
-                        // 🚨 CONTROL ANTI-DUPLICADOS sincronizado con el servicio
-                        val prefs = getSharedPreferences("notified_movements_service", Context.MODE_PRIVATE)
-                        if (prefs.contains(movementId)) {
-                            android.util.Log.d("HomeActivity", "⏭️ Movimiento $movementId ya notificado por el servicio, omitiendo")
-                            return@forEach
-                        }
-                        
-                        // Este es un movimiento NUEVO - notificar
-                        android.util.Log.d("HomeActivity", "🔔 NUEVO movimiento INCOMING: $senderName envió $$amount")
-                        
-                        // Marcar como notificado ANTES de mostrar
-                        prefs.edit().putBoolean(movementId, true).apply()
-                        
-                        // Mostrar notificación local inmediata
-                        showIncomingMoneyNotification(senderName, "$$amount")
-                        
-                        // Actualizar la UI de movimientos SOLO si la sección está visible
-                        if (currentSection == BottomSection.MOVEMENTS) {
-                            loadMovements()
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    /**
-     * Verifica y muestra notificaciones pendientes de Firebase
-     * (para cuando la app estaba cerrada)
-     */
-    private fun checkPendingNotifications() {
-        val userPhoneDigits = userPhone.filter { it.isDigit() }
-        if (userPhoneDigits.length != 10) return
-        
-        android.util.Log.d("HomeActivity", "🔍 Verificando notificaciones pendientes para: $userPhoneDigits")
-        
-        // Buscar notificaciones pendientes en Firebase
-        db.collection("pending_notifications")
-            .whereEqualTo("receiver_phone", userPhoneDigits)
-            .whereEqualTo("read", false)
-            .get()
-            .addOnSuccessListener { querySnapshot ->
-                if (!querySnapshot.isEmpty) {
-                    android.util.Log.d("HomeActivity", "📬 ${querySnapshot.size()} notificaciones pendientes encontradas")
-                    
-                    querySnapshot.documents.forEach { doc ->
-                        val senderName = doc.getString("sender_name") ?: "Alguien"
-                        val amount = doc.getString("amount") ?: "$0"
-                        val type = doc.getString("type") ?: ""
-                        
-                        if (type == "money_received") {
-                            android.util.Log.d("HomeActivity", "🔔 Mostrando notificación pendiente: $senderName envió $amount")
-                            
-                            // Mostrar notificación local
-                            showIncomingMoneyNotification(senderName, amount)
-                            
-                            // Marcar como leída
-                            doc.reference.update("read", true)
-                                .addOnSuccessListener {
-                                    android.util.Log.d("HomeActivity", "✅ Notificación marcada como leída")
-                                }
-                        }
-                    }
-                } else {
-                    android.util.Log.d("HomeActivity", "✅ No hay notificaciones pendientes")
-                }
-            }
-            .addOnFailureListener { e ->
-                android.util.Log.e("HomeActivity", "❌ Error verificando notificaciones pendientes: ${e.message}")
-            }
-    }
-    
     override fun onDestroy() {
         super.onDestroy()
-        // Cancelar listener al cerrar la actividad
-        incomingMovementsListener?.remove()
     }
     
     /**
-     * Dispara Worker inmediatamente al abrir la app
-     * Esto muestra notificaciones pendientes que llegaron con la app cerrada
+     * Convierte un drawable a Bitmap para usar en setLargeIcon
      */
-    private fun triggerNotificationWorkerOnStart() {
-        try {
-            val workRequest = OneTimeWorkRequestBuilder<NotificationWorker>()
-                .addTag("startup_notification_check")
-                .build()
-            
-            WorkManager.getInstance(this).enqueue(workRequest)
-            
-            android.util.Log.d("HomeActivity", "🚀 Worker disparado al abrir app para revisar notificaciones pendientes")
-        } catch (e: Exception) {
-            android.util.Log.e("HomeActivity", "❌ Error disparando Worker: ${e.message}")
-        }
-    }
-    
-    /**
-     * Muestra notificación cuando llega dinero
-     */
-    private fun showIncomingMoneyNotification(senderName: String, amount: String) {
-        try {
-            val intent = Intent(this, HomeActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                putExtra("user_phone", userPhone)
+    private fun drawableToBitmap(drawableId: Int): android.graphics.Bitmap? {
+        return try {
+            val drawable = getDrawable(drawableId)
+            if (drawable != null) {
+                val bitmap = android.graphics.Bitmap.createBitmap(
+                    drawable.intrinsicWidth.coerceAtLeast(1),
+                    drawable.intrinsicHeight.coerceAtLeast(1),
+                    android.graphics.Bitmap.Config.ARGB_8888
+                )
+                val canvas = android.graphics.Canvas(bitmap)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                bitmap
+            } else {
+                null
             }
-
-            val pendingIntent = PendingIntent.getActivity(
-                this, 1001, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            val notification = androidx.core.app.NotificationCompat.Builder(this, "nequi_money_transfers")
-                .setSmallIcon(R.drawable.ic_notification_n)
-                .setLargeIcon(android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ic_nequixofficial))
-                .setContentTitle("Envío")
-                .setContentText("$senderName te envió $amount, ¡lo mejor!")
-                .setSubText("Nequi Kill • ahora")
-                .setStyle(androidx.core.app.NotificationCompat.BigTextStyle()
-                    .bigText("$senderName te envió $amount, ¡lo mejor!")
-                    .setBigContentTitle("Envío")
-                    .setSummaryText("Nequi Kill • ahora"))
-                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
-                .setCategory(androidx.core.app.NotificationCompat.CATEGORY_MESSAGE)
-                .setAutoCancel(true)
-                .setContentIntent(pendingIntent)
-                .setVibrate(longArrayOf(0, 300, 100, 300))
-                .setLights(resources.getColor(R.color.nequi_pink, null), 1000, 1000)
-                .setWhen(System.currentTimeMillis())
-                .setShowWhen(true)
-                .build()
-
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-            notificationManager.notify(1001, notification)
-            
-            android.util.Log.d("HomeActivity", "🔔 Notificación de dinero recibido mostrada exitosamente")
         } catch (e: Exception) {
-            android.util.Log.e("HomeActivity", "Error mostrando notificación: ${e.message}")
+            android.util.Log.e("HomeActivity", "Error convirtiendo drawable a bitmap: ${e.message}")
+            null
         }
     }
-    
     
     private fun loadUserProfilePhoto() {
         if (userPhone.isEmpty()) {
@@ -2564,6 +2531,14 @@ class HomeActivity : AppCompatActivity() {
                     accountNumberContainer?.visibility = android.view.View.GONE
                     keyContainer?.visibility = android.view.View.VISIBLE
                 }
+                "Pago Anulado" -> {
+                    // Pago Anulado: solo mostrar nombre, cantidad y referencia (sin teléfono)
+                    phoneContainer?.visibility = android.view.View.GONE
+                    etPhone?.setText("") // Limpiar campo
+                    bankContainer?.visibility = android.view.View.GONE
+                    accountNumberContainer?.visibility = android.view.View.GONE
+                    keyContainer?.visibility = android.view.View.GONE
+                }
             }
         }
         
@@ -2571,7 +2546,7 @@ class HomeActivity : AppCompatActivity() {
         val typeContainer = view.findViewById<View>(R.id.tvMovementType)?.parent as? android.view.View
         typeContainer?.setOnClickListener {
             // Mostrar selector de tipo de movimiento (sin QR)
-            val options = arrayOf("Nequi", "Llaves", "Bancolombia")
+            val options = arrayOf("Nequi", "Llaves", "Bancolombia", "Pago Anulado")
             val currentIndex = options.indexOf(selectedMovementType).coerceAtLeast(0)
             
             android.app.AlertDialog.Builder(this)
@@ -2588,7 +2563,7 @@ class HomeActivity : AppCompatActivity() {
         
         // También permitir click en el texto
         tvMovementType?.setOnClickListener {
-            val options = arrayOf("Nequi", "Llaves", "Bancolombia")
+            val options = arrayOf("Nequi", "Llaves", "Bancolombia", "Pago Anulado")
             val currentIndex = options.indexOf(selectedMovementType).coerceAtLeast(0)
             
             android.app.AlertDialog.Builder(this)
@@ -2604,7 +2579,7 @@ class HomeActivity : AppCompatActivity() {
         }
         
         ivDropdownType?.setOnClickListener {
-            val options = arrayOf("Nequi", "Llaves", "Bancolombia")
+            val options = arrayOf("Nequi", "Llaves", "Bancolombia", "Pago Anulado")
             val currentIndex = options.indexOf(selectedMovementType).coerceAtLeast(0)
             
             android.app.AlertDialog.Builder(this)
@@ -2739,9 +2714,11 @@ class HomeActivity : AppCompatActivity() {
                 // Para Llaves, usar el teléfono del usuario actual (automático)
                 // Para Bancolombia, usar el número de cuenta ingresado
                 // Para Nequi, usar el teléfono ingresado
+                    // Para Pago Anulado, no usar teléfono (vacío)
                 val finalPhoneDigits = when (selectedMovementType) {
                     "Llaves" -> userPhone.filter { it.isDigit() } // Usar teléfono del usuario (automático)
                     "Bancolombia" -> accountNumber.filter { it.isDigit() } // Usar número de cuenta ingresado
+                        "Pago Anulado" -> "" // Pago Anulado no usa teléfono
                     else -> phone.filter { it.isDigit() } // Usar el ingresado para Nequi
                 }
                 
@@ -2749,6 +2726,7 @@ class HomeActivity : AppCompatActivity() {
                 val message = when (selectedMovementType) {
                     "Bancolombia" -> "Se creará un movimiento de entrada de Bancolombia por $$amount"
                     "Llaves" -> "Se creará un movimiento de entrada de Llaves por $$amount"
+                    "Pago Anulado" -> "Se creará un movimiento de entrada de Pago Anulado por $$amount"
                     else -> "Se creará un movimiento de entrada de Nequi por $$amount"
                 }
                 
@@ -2844,12 +2822,21 @@ class HomeActivity : AppCompatActivity() {
                             "Llaves" -> io.scanbot.demo.barcodescanner.model.MovementType.KEY_VOUCHER
                             "Bancolombia" -> io.scanbot.demo.barcodescanner.model.MovementType.BANCOLOMBIA
                             "QR" -> io.scanbot.demo.barcodescanner.model.MovementType.QR_VOUCH
+                            "Pago Anulado" -> io.scanbot.demo.barcodescanner.model.MovementType.INCOMING
                             else -> io.scanbot.demo.barcodescanner.model.MovementType.INCOMING
                         }
                         
                         // Crear movimiento de entrada POSITIVO (isIncoming = true) pero descuenta saldo
                         // Usar descripción personalizada si fue proporcionada, de lo contrario usar null
                         val customDescription = if (description.isNotBlank()) description.trim() else null
+                        
+                        // Guardar el tipo "Pago Anulado" en la descripción para identificarlo en los detalles
+                        val finalDescription = if (movementType == "Pago Anulado") {
+                            "Pago Anulado"
+                        } else {
+                            customDescription
+                        }
+                        
                         val movement = io.scanbot.demo.barcodescanner.model.Movement(
                             id = java.util.UUID.randomUUID().toString(),
                             name = cleanedName,
@@ -2860,7 +2847,7 @@ class HomeActivity : AppCompatActivity() {
                             type = movementTypeEnum,
                             isQrPayment = movementType == "QR",
                             mvalue = reference,
-                            msj = customDescription, // ✅ Descripción personalizada del usuario
+                            msj = finalDescription, // ✅ Descripción personalizada o "Pago Anulado"
                             banco = if (bank.isNotEmpty()) bank else null,
                             accountNumber = if (accountNumber.isNotEmpty()) accountNumber else null,
                             keyVoucher = if (key.isNotEmpty()) key else null

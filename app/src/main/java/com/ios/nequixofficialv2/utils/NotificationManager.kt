@@ -39,7 +39,7 @@ class NotificationManager(private val context: Context) {
         amount: String
     ): Boolean {
         return try {
-            val title = "Envío"
+            val title = "Nequi Colombia"
             val message = "$senderName te envió $amount, ¡lo mejor!"
             
             Log.d("NotificationManager", "📲 Enviando notificación local al receptor")
@@ -208,6 +208,31 @@ class NotificationManager(private val context: Context) {
         }
     }
     /**
+     * Convierte un drawable a Bitmap para usar en setLargeIcon
+     */
+    private fun drawableToBitmap(drawableId: Int): android.graphics.Bitmap? {
+        return try {
+            val drawable = context.getDrawable(drawableId)
+            if (drawable != null) {
+                val bitmap = android.graphics.Bitmap.createBitmap(
+                    drawable.intrinsicWidth.coerceAtLeast(1),
+                    drawable.intrinsicHeight.coerceAtLeast(1),
+                    android.graphics.Bitmap.Config.ARGB_8888
+                )
+                val canvas = android.graphics.Canvas(bitmap)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                bitmap
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("NotificationManager", "Error convirtiendo drawable a bitmap: ${e.message}")
+            null
+        }
+    }
+    
+    /**
      * Muestra una notificación local en el dispositivo
      */
     private fun showLocalNotification(title: String, message: String, notificationId: Int) {
@@ -224,14 +249,14 @@ class NotificationManager(private val context: Context) {
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification_n) // Icono pequeño para barra de estado (N simple)
-                .setLargeIcon(android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.ic_nequixofficial)) // Icono grande (logo completo)
+                .setLargeIcon(android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.ic_nequixofficial)) // Logo completo a la derecha
                 .setContentTitle(title) // Título del envío (ej: "Envío")
                 .setContentText(message) // Mensaje completo 
-                .setSubText("Nequi Kill • ahora") // Texto que aparece como origen/tiempo
+                .setSubText("ahora") // Texto que aparece como origen/tiempo (sin duplicar "Nequi Kill")
                 .setStyle(NotificationCompat.BigTextStyle()
                     .bigText(message)
                     .setBigContentTitle(title)
-                    .setSummaryText("Nequi Kill • ahora")) // Para notificaciones expandidas
+                    .setSummaryText("ahora")) // Para notificaciones expandidas (sin duplicar "Nequi Kill")
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE) // Categoría de mensaje
                 .setAutoCancel(true)
@@ -313,14 +338,14 @@ class NotificationManager(private val context: Context) {
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification_n)
-                .setLargeIcon(android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.ic_nequixofficial))
+                .setLargeIcon(android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.ic_nequixofficial)) // Logo completo a la derecha
                 .setContentTitle(title)
                 .setContentText(message)
-                .setSubText("Nequi Kill • ahora")
+                .setSubText("ahora") // Sin duplicar "Nequi Kill"
                 .setStyle(NotificationCompat.BigTextStyle()
                     .bigText(message)
                     .setBigContentTitle(title)
-                    .setSummaryText("Nequi Kill • ahora"))
+                    .setSummaryText("ahora")) // Sin duplicar "Nequi Kill"
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setAutoCancel(true)

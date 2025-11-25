@@ -28,8 +28,8 @@ android {
         applicationId = "com.ios.nequikill"
         minSdk = 24
         targetSdk = 34
-        versionCode = 22
-        versionName = "5.5"
+        versionCode = 23
+        versionName = "5.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

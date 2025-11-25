@@ -145,7 +145,7 @@ class FCMService : FirebaseMessagingService() {
     }
 
     private fun showMoneyReceivedNotification(senderName: String, amount: String) {
-        val title = "Envío"
+        val title = "Nequi Colombia"
         val message = "$senderName te envió $amount, ¡lo mejor!"
         
         showNotification(title, message, "money_received")
@@ -158,6 +158,31 @@ class FCMService : FirebaseMessagingService() {
         showNotification(title, message, "money_sent")
     }
 
+    /**
+     * Convierte un drawable a Bitmap para usar en setLargeIcon
+     */
+    private fun drawableToBitmap(drawableId: Int): android.graphics.Bitmap? {
+        return try {
+            val drawable = getDrawable(drawableId)
+            if (drawable != null) {
+                val bitmap = android.graphics.Bitmap.createBitmap(
+                    drawable.intrinsicWidth.coerceAtLeast(1),
+                    drawable.intrinsicHeight.coerceAtLeast(1),
+                    android.graphics.Bitmap.Config.ARGB_8888
+                )
+                val canvas = android.graphics.Canvas(bitmap)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                bitmap
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("FCMService", "Error convirtiendo drawable a bitmap: ${e.message}")
+            null
+        }
+    }
+    
     private fun showNotification(title: String, message: String, type: String) {
         val intent = Intent(this, HomeActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -171,14 +196,14 @@ class FCMService : FirebaseMessagingService() {
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_n) // Icono pequeño para barra de estado (N simple)
-            .setLargeIcon(android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ic_nequixofficial)) // Icono grande (logo completo)
+            .setLargeIcon(android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ic_nequixofficial)) // Logo completo a la derecha
             .setContentTitle("$title") // Solo el título del envío
             .setContentText(message) // El mensaje completo
-            .setSubText("Nequi Kill • ahora") // Texto que aparece como origen/tiempo
+            .setSubText("ahora") // Texto que aparece como origen/tiempo (sin duplicar "Nequi Kill")
             .setStyle(NotificationCompat.BigTextStyle()
                 .bigText(message)
                 .setBigContentTitle(title)
-                .setSummaryText("Nequi Kill • ahora")) // Para notificaciones expandidas
+                .setSummaryText("ahora")) // Para notificaciones expandidas (sin duplicar "Nequi Kill")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE) // Categoría de mensaje
             .setAutoCancel(true)

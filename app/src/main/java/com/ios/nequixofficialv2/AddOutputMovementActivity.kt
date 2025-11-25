@@ -511,10 +511,12 @@ class AddOutputMovementActivity : AppCompatActivity() {
                 }
                 
                 val userDoc = query.documents.first()
-                val currentBalance = userDoc.getDouble("saldo") ?: 0.0
+                // ✅ CORRECCIÓN: Usar readBalanceFlexible para leer como Long (consistente con el resto del código)
+                val currentBalance = readBalanceFlexible(userDoc, "saldo") ?: 0L
+                val amountLong = amount.toLong()
                 
                 // Validar saldo ANTES de guardar
-                if (currentBalance < amount) {
+                if (currentBalance < amountLong) {
                     runOnUiThread {
                         com.ios.nequixofficialv2.utils.NequiAlert.showError(
                             this@AddOutputMovementActivity, 
@@ -586,23 +588,42 @@ class AddOutputMovementActivity : AppCompatActivity() {
      * @param isIncoming false para restar (salida)
      * @param userRef Referencia al documento del usuario en Firestore
      */
+    /**
+     * Lee el saldo de forma flexible (Long o String)
+     */
+    private fun readBalanceFlexible(snap: com.google.firebase.firestore.DocumentSnapshot, field: String): Long? {
+        val anyVal = snap.get(field) ?: return null
+        return when (anyVal) {
+            is Number -> anyVal.toLong()
+            is String -> {
+                val digits = anyVal.filter { it.isDigit() }
+                digits.toLongOrNull()
+            }
+            else -> null
+        }
+    }
+    
     private fun updateUserBalance(amount: Double, isIncoming: Boolean, userRef: com.google.firebase.firestore.DocumentReference) {
+        // Convertir amount a Long para consistencia
+        val amountLong = amount.toLong()
+        
         // Usar transacción para actualizar saldo de forma segura
         db.runTransaction { transaction ->
             val snapshot = transaction.get(userRef)
-            val currentBalance = snapshot.getDouble("saldo") ?: 0.0
+            // ✅ CORRECCIÓN: Usar readBalanceFlexible para leer como Long (consistente con el resto del código)
+            val currentBalance = readBalanceFlexible(snapshot, "saldo") ?: 0L
             
-            if (!isIncoming && currentBalance < amount) {
+            if (!isIncoming && currentBalance < amountLong) {
                 throw com.google.firebase.firestore.FirebaseFirestoreException("Saldo insuficiente", com.google.firebase.firestore.FirebaseFirestoreException.Code.ABORTED)
             }
             
             val newBalance = if (isIncoming) {
-                currentBalance + amount
+                currentBalance + amountLong
             } else {
-                currentBalance - amount
+                currentBalance - amountLong
             }
             
-            android.util.Log.d("AddOutputMovementActivity", "💰 Saldo anterior: $currentBalance, nuevo saldo: $newBalance (resta: $amount)")
+            android.util.Log.d("AddOutputMovementActivity", "💰 Saldo anterior: $currentBalance, nuevo saldo: $newBalance (${if (isIncoming) "suma" else "resta"}: $amountLong)")
             
             transaction.update(userRef, "saldo", newBalance)
             newBalance

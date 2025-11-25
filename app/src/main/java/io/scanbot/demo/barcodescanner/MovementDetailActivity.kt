@@ -231,6 +231,7 @@ private fun computeInSampleSize(srcW: Int, srcH: Int, reqW: Int, reqH: Int): Int
                 val mvalue = intent.getStringExtra(EXTRA_MVALUE) ?: ""
                 val isQrPayment = intent.getBooleanExtra("IS_QR_PAYMENT", false)
                 val movementTypeStr = intent.getStringExtra(EXTRA_TYPE) ?: ""
+                val msj = intent.getStringExtra(EXTRA_MSJ) ?: "" // Obtener descripción/mensaje
                 
                 // Detectar tipo de movimiento
                 val isKeySend = movementTypeStr.contains("key_voucher", ignoreCase = true) || 
@@ -239,20 +240,24 @@ private fun computeInSampleSize(srcW: Int, srcH: Int, reqW: Int, reqH: Int): Int
                                   movementTypeStr.contains("BANCOLOMBIA", ignoreCase = true)
                 val isQr = isQrPayment || movementTypeStr.contains("qr_vouch", ignoreCase = true) || 
                           movementTypeStr.contains("QR_VOUCH", ignoreCase = true)
+                val isPagoAnulado = msj.contains("Pago Anulado", ignoreCase = true) // Detectar "Pago Anulado"
                 
                 android.util.Log.d("MovDetailQr", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                 android.util.Log.d("MovDetailQr", "🔍 DETECCIÓN DE TIPO DE PAGO:")
                 android.util.Log.d("MovDetailQr", "   IS_QR_PAYMENT flag = $isQrPayment")
                 android.util.Log.d("MovDetailQr", "   movementType = $movementTypeStr")
-                android.util.Log.d("MovDetailQr", "   isQr = $isQr, isKeySend = $isKeySend, isBancolombia = $isBancolombia")
+                android.util.Log.d("MovDetailQr", "   msj = $msj")
+                android.util.Log.d("MovDetailQr", "   isQr = $isQr, isKeySend = $isKeySend, isBancolombia = $isBancolombia, isPagoAnulado = $isPagoAnulado")
                 android.util.Log.d("MovDetailQr", "   Recipient = $recipient")
                 android.util.Log.d("MovDetailQr", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                 
                 // Seleccionar plantilla según tipo de pago
+                // Para Pago Anulado: usar cickel_kalvore.cache
                 // Para Bancolombia: usar janskis_banco_detals.cache
                 // Para QR y llaves: usar micstolakm.pronf (completa, sin recortes)
                 // Para Nequi normal: usar res_detail_0xf4a1.bin
                 val templateNames = when {
+                    isPagoAnulado -> arrayOf("cickel_kalvore.cache")
                     isBancolombia -> arrayOf("janskis_banco_detals.cache")
                     isQr || isKeySend -> arrayOf("micstolakm.pronf")
                     else -> arrayOf("res_detail_0xf4a1.bin", "details_nequi_movements.jpg")
@@ -388,6 +393,20 @@ private fun computeInSampleSize(srcW: Int, srcH: Int, reqW: Int, reqH: Int): Int
                         isBancolombia = true, // Indicar que es Bancolombia para usar coordenadas específicas
                         userPhone = userPhoneFormatted, // Número del usuario que envía
                         bancoDestino = bancoDestino // Banco destino del movimiento
+                    )
+                } else if (isPagoAnulado) {
+                    // Pago Anulado: usar cickel_kalvore.cache (plantilla específica para Pago Anulado)
+                    // Solo muestra: nombre, cantidad, fecha y referencia (sin teléfono ni disponible)
+                    composeDetailOverlay(
+                        base = baseBitmap,
+                        para = toTitleCase(recipient),
+                        cuanto = amount,
+                        numeroNequi = "", // Pago Anulado no muestra teléfono
+                        fecha = dateFormatted,
+                        referencia = reference,
+                        disponible = "", // Pago Anulado no muestra disponible
+                        isQrPayment = false,
+                        isPagoAnulado = true // Indicar que es Pago Anulado para usar coordenadas específicas
                     )
                 } else {
                     // Nequi normal: usar res_detail_0xf4a1.bin (solo primera parte)
@@ -917,6 +936,7 @@ private fun computeInSampleSize(srcW: Int, srcH: Int, reqW: Int, reqH: Int): Int
         disponible: String,
         isQrPayment: Boolean = false,
         isBancolombia: Boolean = false, // Indicador para plantilla específica de Bancolombia
+        isPagoAnulado: Boolean = false, // Indicador para plantilla específica de Pago Anulado
         userPhone: String = "", // Número del usuario que envía (para "DESDE DONDE SALIO")
         bancoDestino: String = "" // Banco destino del movimiento
     ): android.graphics.Bitmap {
@@ -935,13 +955,8 @@ private fun computeInSampleSize(srcW: Int, srcH: Int, reqW: Int, reqH: Int): Int
         val configSection = if (isQrPayment) "DETALLE_MOVIMIENTO_QR_CONFIG" else "DETALLE_MOVIMIENTO_NEQUI_CONFIG"
         val config = loadConfigFromPython(configSection)
         
-        // Cargar fuente Manrope
-        // Para Bancolombia: usar específicamente manrope_medium.ttf
-        val manrope = if (isBancolombia) {
-            loadManropeMediumFont() ?: loadManropeFont()
-        } else {
-            loadManropeFont()
-        }
+        // Cargar fuente Manrope Medium para TODOS los movimientos
+        val manrope = loadManropeMediumFont() ?: loadManropeFont()
         
         // Para Bancolombia, QR y Llaves: usar color específico #200021
         val color = if (isBancolombia || isQrPayment) {
@@ -983,6 +998,41 @@ private fun computeInSampleSize(srcW: Int, srcH: Int, reqW: Int, reqH: Int): Int
         
         // Coordenadas ULTRA MEGA 4K SUPREMA (escaladas 3x)
         val fields = when {
+            isPagoAnulado -> {
+                // ✅ Coordenadas específicas para plantilla cickel_kalvore.cache (Pago Anulado)
+                // Basado en la imagen: solo muestra nombre, cantidad, fecha y referencia
+                val fieldsMap = mutableMapOf<String, Float>()
+                
+                // 1. Para (Nombre del destinatario) - Y: 300 (escalado 3x = 1686)
+                if (para.isNotBlank()) {
+                    fieldsMap[para] = 300f * 3
+                }
+                
+                // 2. Valor/Cantidad - Y: 385 (escalado 3x = 1905)
+                if (cuanto.isNotBlank()) {
+                    fieldsMap[cuanto] = 385f * 3
+                }
+                
+                // 3. Fecha - Y: 465 (escalado 3x = 2145)
+                if (fecha.isNotBlank()) {
+                    fieldsMap[fecha] = 465f * 3
+                }
+                
+                // 4. Referencia - Y: 550 (escalado 3x = 2355)
+                if (referencia.isNotBlank()) {
+                    fieldsMap[referencia] = 550f * 3
+                }
+                
+                // NOTA: Pago Anulado NO muestra teléfono ni disponible
+                
+                android.util.Log.d("MovDetailPagoAnulado", "📋 Campos Pago Anulado (coordenadas):")
+                android.util.Log.d("MovDetailPagoAnulado", "   1. Para: '$para' -> Y: ${562f * 3} (base: 562)")
+                android.util.Log.d("MovDetailPagoAnulado", "   2. Cuanto: '$cuanto' -> Y: ${635f * 3} (base: 635)")
+                android.util.Log.d("MovDetailPagoAnulado", "   3. Fecha: '$fecha' -> Y: ${715f * 3} (base: 715)")
+                android.util.Log.d("MovDetailPagoAnulado", "   4. Referencia: '$referencia' -> Y: ${785f * 3} (base: 785)")
+                
+                fieldsMap
+            }
             isBancolombia -> {
                 // ✅ Coordenadas específicas para plantilla janskis_banco_detals.cache (636x1280 píxeles, escaladas 3x)
                 // Coordenadas exactas proporcionadas para la plantilla de Bancolombia
@@ -1106,14 +1156,15 @@ private fun computeInSampleSize(srcW: Int, srcH: Int, reqW: Int, reqH: Int): Int
         }
         }
         
-        // X position: 40 para Bancolombia, 45 para QR/Llaves, 48 para Nequi normal (escalado 3x)
+        // X position: 40 para Bancolombia, 45 para QR/Llaves y Pago Anulado, 48 para Nequi normal (escalado 3x)
         val xPos = when {
             isBancolombia -> 40f * 3
-            isQrPayment -> 45f * 3
+            isQrPayment || isPagoAnulado -> 45f * 3
             else -> (config["x_position"]?.toFloatOrNull() ?: 48f) * 3
         }
         
         val coordinateType = when {
+            isPagoAnulado -> "Pago Anulado (cickel_kalvore.cache)"
             isBancolombia -> "Bancolombia (janskis_banco_detals.cache)"
             isQrPayment -> "QR/Llaves (micstolakm.pronf)"
             else -> "Nequi normal"

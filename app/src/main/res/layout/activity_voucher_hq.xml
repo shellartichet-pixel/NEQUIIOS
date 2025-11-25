@@ -6,30 +6,33 @@
     android:background="@color/comprobante_background"
     android:hardwareAccelerated="true"
     android:layerType="hardware"
-    android:cacheColorHint="@android:color/transparent">
+    android:cacheColorHint="@android:color/transparent"
+    android:fitsSystemWindows="false">
 
-    <!-- Imagen del voucher en ULTRA CALIDAD 4K MEGA REAL -->
-    <ImageView
-        android:id="@+id/ivVoucherHQ"
+    <!-- ScrollView para mostrar foto completa desde arriba sin espacios blancos -->
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:scaleType="fitCenter"
-        android:adjustViewBounds="true"
-        android:contentDescription="Comprobante de pago"
-        android:filterTouchesWhenObscured="false"
-        android:layerType="hardware"
-        android:cacheColorHint="@android:color/transparent"
-        android:alpha="1.0" />
+        android:fillViewport="false"
+        android:scrollbars="none"
+        android:overScrollMode="never"
+        android:fadingEdge="none"
+        android:fitsSystemWindows="false">
 
-    <!-- Círculo de carga -->
-    <ImageView
-        android:id="@+id/loadingCircleVoucher"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:layout_gravity="center"
-        android:src="@drawable/loading_circle_comprobante"
-        android:contentDescription="Cargando"
-        android:visibility="visible" />
+        <!-- Imagen del voucher - foto completa que se adapta a todos los DPI -->
+        <ImageView
+            android:id="@+id/ivVoucherHQ"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scaleType="fitStart"
+            android:adjustViewBounds="true"
+            android:contentDescription="Comprobante de pago"
+            android:filterTouchesWhenObscured="false"
+            android:layerType="hardware"
+            android:cacheColorHint="@android:color/transparent"
+            android:alpha="1.0"
+            android:visibility="gone" />
+    </ScrollView>
 
     <!-- Botón invisible para "Listo" (zona inferior) -->
     <View
