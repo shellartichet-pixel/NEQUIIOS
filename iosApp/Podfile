@@ -3,11 +3,11 @@ platform :ios, '15.0'
 target 'NequixiOS' do
   use_frameworks!
 
-  pod 'Firebase/Auth'
-  pod 'Firebase/Firestore'
-  pod 'Firebase/Storage'
-  pod 'Firebase/Messaging'
-  pod 'Firebase/Analytics'
+  pod 'Firebase/Auth', '~> 10.25.0'
+  pod 'Firebase/Firestore', '~> 10.25.0'
+  pod 'Firebase/Storage', '~> 10.25.0'
+  pod 'Firebase/Messaging', '~> 10.25.0'
+  pod 'Firebase/Analytics', '~> 10.25.0'
 
 end
 
