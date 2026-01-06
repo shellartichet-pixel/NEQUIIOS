@@ -3,11 +3,10 @@ platform :ios, '15.0'
 target 'NequixiOS' do
   use_frameworks!
 
-  pod 'Firebase/Auth', '~> 10.25.0'
-  pod 'Firebase/Firestore', '~> 10.25.0'
-  pod 'Firebase/Storage', '~> 10.25.0'
-  pod 'Firebase/Messaging', '~> 10.25.0'
-  pod 'Firebase/Analytics', '~> 10.25.0'
+  pod 'FirebaseAuth'
+  pod 'FirebaseFirestore'
+  pod 'FirebaseStorage'
+  pod 'FirebaseAnalytics'
 
 end
 
@@ -16,6 +15,8 @@ post_install do |installer|
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
       config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
+      config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'NO'
+      config.build_settings['OTHER_CFLAGS'] = '$(inherited) -Wno-error'
     end
   end
 end
