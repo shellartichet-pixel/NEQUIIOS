@@ -1,281 +1,142 @@
 import SwiftUI
 
 struct ServiciosView: View {
-    @State private var searchText: String = ""
-    @State private var isLoadingCategories: Bool = true
-    @State private var isLoadingBanner: Bool = true
-    
     private let nequiPurple = Color(hex: "200020")
-    private let nequiPink = Color(hex: "da0081")
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                headerSection
-                searchField
-                misPagosInscritos
-                categoriasHeader
-                
-                if isLoadingCategories {
-                    shimmerCategories
-                } else {
-                    categoriesGrid
+        VStack(spacing: 0) {
+            headerView
+            
+            ScrollView {
+                VStack(spacing: 24) {
+                    quickActions
+                    allServices
                 }
-                
-                if !isLoadingCategories {
-                    if isLoadingBanner {
-                        shimmerBanner
-                    } else {
-                        bannerImage
-                    }
-                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
             }
-            .padding(.bottom, 32)
-        }
-        .background(Color.white)
-        .onAppear {
-            loadContent()
         }
     }
     
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Servicios")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(nequiPurple)
-                .padding(.horizontal, 16)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 40)
-        .padding(.bottom, 16)
-        .background(Color.white)
-    }
-    
-    private var searchField: some View {
+    private var headerView: some View {
         HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(Color(hex: "99200020"))
-                .padding(.leading, 16)
-            
-            TextField("¿Qué empresa necesitas?", text: $searchText)
-                .font(.system(size: 16))
-                .foregroundColor(.black)
-                .padding(.trailing, 16)
-        }
-        .frame(height: 38)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(hex: "F5F5F5"))
-        )
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-    }
-    
-    private var misPagosInscritos: some View {
-        Rectangle()
-            .fill(Color.gray.opacity(0.1))
-            .frame(height: 100)
-            .cornerRadius(8)
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-    }
-    
-    private var categoriasHeader: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "square.grid.2x2")
+            Text("Servicios")
+                .font(.system(size: 24, weight: .bold))
                 .foregroundColor(nequiPurple)
-                .frame(width: 20, height: 20)
-            
-            Text("Categorías")
-                .font(.system(size: 16, weight: .bold))
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+    }
+    
+    private var quickActions: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Acciones rápidas")
+                .font(.system(size: 16, weight: .medium))
                 .foregroundColor(nequiPurple)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.top, 24)
-    }
-    
-    private var shimmerCategories: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 0)
-        ], spacing: 12) {
-            ForEach(0..<10, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color(hex: "bbbababa"))
-                    .frame(height: 70)
-                    .shimmerEffect()
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 16) {
+                ServiceItem(icon: "phone.fill", title: "Recargas")
+                ServiceItem(icon: "bolt.fill", title: "Servicios")
+                ServiceItem(icon: "building.2.fill", title: "Bancos")
+                ServiceItem(icon: "qrcode", title: "QR")
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 16)
     }
     
-    private var categoriesGrid: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 0)
-        ], spacing: 12) {
-            CategoryCard(
-                icon: "phone.fill",
-                title: "Celulares y\npaquetes",
-                iconColor: nequiPink
-            )
+    private var allServices: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Todos los servicios")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(nequiPurple)
             
-            CategoryCard(
-                icon: "heart.fill",
-                title: "Donaciones",
-                iconColor: nequiPink
-            )
-            
-            CategoryCard(
-                icon: "tv.fill",
-                title: "Entretenimiento",
-                iconColor: nequiPink
-            )
-            
-            CategoryCard(
-                icon: "dollarsign.circle.fill",
-                title: "Finanzas",
-                iconColor: nequiPink
-            )
-            
-            CategoryCard(
-                icon: "storefront.fill",
-                title: "Negocios Nequi",
-                iconColor: nequiPink
-            )
-            
-            CategoryCard(
-                icon: "cross.case.fill",
-                title: "Seguridad y salud",
-                iconColor: nequiPink
-            )
-            
-            CategoryCard(
-                icon: "house.fill",
-                title: "Servicios públicos",
-                iconColor: nequiPink
-            )
-            
-            TiendaVirtualCard()
-            
-            CategoryCard(
-                icon: "bus.fill",
-                title: "Transporte y\nviajes",
-                iconColor: nequiPink
-            )
-        }
-        .padding(.horizontal, 8)
-        .padding(.top, 16)
-    }
-    
-    private var shimmerBanner: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(Color(hex: "bbbababa"))
-            .frame(height: 120)
-            .shimmerEffect()
-            .padding(.horizontal, 12)
-            .padding(.top, 24)
-    }
-    
-    private var bannerImage: some View {
-        Rectangle()
-            .fill(Color.gray.opacity(0.1))
-            .frame(height: 120)
-            .cornerRadius(8)
-            .padding(.horizontal, 12)
-            .padding(.top, 24)
-            .padding(.bottom, 32)
-    }
-    
-    private func loadContent() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-            withAnimation {
-                isLoadingCategories = false
+            VStack(spacing: 0) {
+                ServiceRow(icon: "phone.fill", title: "Recarga de celular", subtitle: "Claro, Movistar, Tigo, WOM")
+                ServiceRow(icon: "bolt.fill", title: "Pago de servicios", subtitle: "Luz, agua, gas, internet")
+                ServiceRow(icon: "building.2.fill", title: "Enviar a otros bancos", subtitle: "Bancolombia, Davivienda, BBVA")
+                ServiceRow(icon: "bed.double.fill", title: "Colchón", subtitle: "Ahorra para tus metas")
+                ServiceRow(icon: "bag.fill", title: "Bolsillos", subtitle: "Organiza tu plata")
+                ServiceRow(icon: "creditcard.fill", title: "Tarjeta Nequi", subtitle: "Pide tu tarjeta física")
+                ServiceRow(icon: "dollarsign.circle.fill", title: "Créditos", subtitle: "Préstamos rápidos")
             }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation {
-                    isLoadingBanner = false
-                }
-            }
+            .background(Color.white)
+            .cornerRadius(12)
+            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
         }
     }
 }
 
-struct CategoryCard: View {
+struct ServiceItem: View {
     let icon: String
     let title: String
-    let iconColor: Color
+    
+    private let nequiPurple = Color(hex: "200020")
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(nequiPurple.opacity(0.1))
+                    .frame(width: 50, height: 50)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 22))
+                    .foregroundColor(nequiPurple)
+            }
+            
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundColor(nequiPurple)
+                .multilineTextAlignment(.center)
+        }
+    }
+}
+
+struct ServiceRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    
     private let nequiPurple = Color(hex: "200020")
     
     var body: some View {
         Button(action: {}) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .foregroundColor(iconColor)
-                    .frame(width: 30, height: 30)
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(nequiPurple.opacity(0.1))
+                        .frame(width: 44, height: 44)
+                    
+                    Image(systemName: icon)
+                        .font(.system(size: 20))
+                        .foregroundColor(nequiPurple)
+                }
                 
-                Text(title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(nequiPurple)
-                    .lineSpacing(2)
-                    .multilineTextAlignment(.leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(nequiPurple)
+                    
+                    Text(subtitle)
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                }
                 
                 Spacer()
-            }
-            .padding(12)
-            .frame(height: 70)
-            .background(Color.white)
-            .cornerRadius(4)
-            .shadow(color: nequiPurple.opacity(0.3), radius: 3, x: 0, y: 2)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-struct TiendaVirtualCard: View {
-    private let nequiPurple = Color(hex: "200020")
-    private let nequiPink = Color(hex: "da0081")
-    
-    var body: some View {
-        Button(action: {}) {
-            VStack(spacing: 0) {
-                HStack {
-                    Spacer()
-                    Text("Compra y recibe plata")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(nequiPurple)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 0.5)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color(hex: "E2FAFE"))
-                        )
-                    Spacer()
-                }
-                .padding(.top, -10)
                 
-                HStack(spacing: 12) {
-                    Image(systemName: "bag.fill")
-                        .foregroundColor(nequiPink)
-                        .frame(width: 30, height: 30)
-                    
-                    Text("Tienda virtual")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(nequiPurple)
-                    
-                    Spacer()
-                }
-                .padding(12)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
             }
-            .frame(height: 70)
-            .background(Color.white)
-            .cornerRadius(4)
-            .shadow(color: nequiPurple.opacity(0.3), radius: 3, x: 0, y: 2)
+            .padding()
         }
-        .buttonStyle(PlainButtonStyle())
+        
+        Divider()
+            .padding(.leading, 76)
     }
 }
-

@@ -1,14 +1,13 @@
-# Uncomment the next line to define a global platform for your project
 platform :ios, '15.0'
 
 target 'NequixiOS' do
   use_frameworks!
 
-  pod 'shared', :path => '../shared'
   pod 'Firebase/Auth'
   pod 'Firebase/Firestore'
   pod 'Firebase/Storage'
   pod 'Firebase/Messaging'
+  pod 'Firebase/Analytics'
 
 end
 
@@ -16,43 +15,7 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
-    end
-    
-    # Fix CRÍTICO para todos los targets _Privacy bundle error - deshabilitar CopySwiftLibs
-    # Estos bundles no tienen ejecutables, por lo que CopySwiftLibs falla
-    if target.name.end_with?('_Privacy') || target.name.include?('Privacy')
-      puts "  🔧 Corrigiendo target: #{target.name}"
-      
-      # Método 1: Eliminar build phases de CopySwiftLibs
-      phases_to_remove = []
-      target.build_phases.each do |phase|
-        if phase.respond_to?(:dst_subfolder_spec) && phase.dst_subfolder_spec == 16
-          puts "    ❌ Removiendo CopySwiftLibs (dst_subfolder_spec=16) de #{target.name}"
-          phases_to_remove << phase
-        elsif phase.respond_to?(:name) && phase.name == 'CopySwiftLibs'
-          puts "    ❌ Removiendo CopySwiftLibs (por nombre) de #{target.name}"
-          phases_to_remove << phase
-        elsif phase.respond_to?(:shell_script) && phase.shell_script && phase.shell_script.include?('swiftStdLibTool')
-          puts "    ❌ Removiendo script phase CopySwiftLibs de #{target.name}"
-          phases_to_remove << phase
-        end
-      end
-      
-      phases_to_remove.each do |phase|
-        target.build_phases.delete(phase)
-      end
-      
-      # Método 2: Deshabilitar CopySwiftLibs en build settings
-      target.build_configurations.each do |config|
-        config.build_settings['ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES'] = 'NO'
-        config.build_settings['EMBEDDED_CONTENT_CONTAINS_SWIFT'] = 'NO'
-      end
-      
-      puts "    ✅ Target #{target.name} corregido"
+      config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
     end
   end
-  
-  # Guardar los cambios en el proyecto
-  installer.pods_project.save
-  puts "✅ Podfile post_install completado"
 end

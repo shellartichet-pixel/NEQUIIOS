@@ -4,23 +4,25 @@ struct RootView: View {
     @EnvironmentObject var appState: AppState
     
     var body: some View {
-        Group {
+        ZStack {
             switch appState.currentView {
             case .splash:
                 SplashView()
+                    .transition(.opacity)
+                
             case .login:
                 LoginView()
+                    .transition(.opacity)
+                
             case .pin:
                 PinView(phone: appState.userPhone)
+                    .transition(.opacity)
+                
             case .home:
                 MainTabView()
+                    .transition(.opacity)
             }
         }
-        .transition(.opacity)
-        .animation(.easeInOut, value: appState.currentView)
-        .onAppear {
-            print("✅ RootView apareció - Vista actual: \(appState.currentView)")
-        }
+        .animation(.easeInOut(duration: 0.3), value: appState.currentView)
     }
 }
-
